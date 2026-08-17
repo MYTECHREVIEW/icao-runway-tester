@@ -172,8 +172,12 @@ function clearRunwayLayers() {
 }
 
 function selectTaxiway(ref) {
+  // If clicking on the already selected taxiway, TOGGLE OFF and show all taxiways!
+  if (selectedTaxiwayRef === ref) {
+    resetTaxiwaySelection();
+    return;
+  }
   selectedTaxiwayRef = ref;
-  // Ensure taxiway layer is ON when user selects a specific taxiway
   if (!showTaxiways) {
     showTaxiways = true;
     localStorage.setItem(SHOW_TAXIWAYS_KEY, 'true');
@@ -327,7 +331,8 @@ function drawRunways(data) {
     // Clicking runway polyline isolates that runway!
     poly.on('click', (e) => {
       L.DomEvent.stopPropagation(e);
-      selectedRunwayKey = getRunwayKey(rwy);
+      const key = getRunwayKey(rwy);
+      selectedRunwayKey = (selectedRunwayKey === key) ? null : key;
       clearRunwayLayers();
       drawRunways(lastResult);
       updateResults(lastResult);
@@ -366,7 +371,8 @@ function drawRunways(data) {
     if (leLabel) {
       leLabel.on('click', (e) => {
         L.DomEvent.stopPropagation(e);
-        selectedRunwayKey = getRunwayKey(rwy);
+        const key = getRunwayKey(rwy);
+        selectedRunwayKey = (selectedRunwayKey === key) ? null : key;
         clearRunwayLayers();
         drawRunways(lastResult);
         updateResults(lastResult);
@@ -376,7 +382,8 @@ function drawRunways(data) {
     if (heLabel) {
       heLabel.on('click', (e) => {
         L.DomEvent.stopPropagation(e);
-        selectedRunwayKey = getRunwayKey(rwy);
+        const key = getRunwayKey(rwy);
+        selectedRunwayKey = (selectedRunwayKey === key) ? null : key;
         clearRunwayLayers();
         drawRunways(lastResult);
         updateResults(lastResult);
