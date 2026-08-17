@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  icao-runway-analyzer:
+    container_name: icao-runway-analyzer
+    image: icao-runway-analyzer:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3500:3500"
+    environment:
+      - PORT=3500
+      - NODE_ENV=production
+    # Optional persistent data volume if mounting custom runway datasets:
+    # volumes:
+    #   - ./data:/app/data:ro

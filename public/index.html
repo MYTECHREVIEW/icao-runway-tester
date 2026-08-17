@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ICAO Runway Analyzer — Touchdown & Centerline Tester</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+
+    <!-- Header -->
+    <div class="sidebar-header">
+      <div class="logo">
+        <span class="logo-icon">✈</span>
+        <div>
+          <div class="logo-title">Runway Analyzer</div>
+          <div class="logo-sub">ICAO Touchdown &amp; Centerline Tester</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Instruction -->
+    <div class="instruction-card" id="instructionCard">
+      <div class="instruction-icon">📍</div>
+      <div class="instruction-text">
+        <strong>Click anywhere on the map</strong> to drop a pin on an airport or runway.
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-card hidden" id="loadingCard">
+      <div class="spinner"></div>
+      <span>Analyzing position &amp; weather feeds...</span>
+    </div>
+
+    <!-- Coordinates display -->
+    <div class="coords-card hidden" id="coordsCard">
+      <div class="coords-label">📌 Pin Location</div>
+      <div class="coords-value" id="coordsValue">—</div>
+    </div>
+
+    <!-- ── Airport Info Card ───────────────────────────────────────────── -->
+    <div class="airport-card hidden" id="airportCard">
+      <div class="airport-header">
+        <div class="airport-badges">
+          <span class="icao-badge" id="cardIcao">—</span>
+          <span class="iata-badge" id="cardIata">—</span>
+        </div>
+        <div class="airport-elev-badge">
+          <span class="elev-label">ELEV</span>
+          <span class="elev-val" id="cardElev">—</span>
+        </div>
+      </div>
+      <div class="airport-name" id="cardAirportName">—</div>
+      <div class="airport-location" id="cardLocation">—</div>
+    </div>
+
+    <!-- ── ATIS / Weather Source Control Panel ──────────────────────────── -->
+    <div class="panel hidden" id="sourceControlPanel">
+      <div class="panel-header">
+        <span class="panel-icon">📻</span>
+        <span class="panel-title">ATIS / Weather Source</span>
+      </div>
+      <div class="panel-body">
+        <div class="source-selector-title">Preferred Primary Source:</div>
+        <div class="source-pills-row" id="sourceSelector">
+          <button class="source-pill active" data-source="real_world">Real ATIS</button>
+          <button class="source-pill" data-source="vatsim">VATSIM</button>
+          <button class="source-pill" data-source="ivao">IVAO</button>
+          <button class="source-pill" data-source="metar">METAR</button>
+        </div>
+        <div class="active-source-indicator" id="activeSourceIndicator">
+          <span class="indicator-dot"></span>
+          <span id="activeSourceText">Active: Real World D-ATIS</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- On-Runway Status Banner -->
+    <div class="status-banner hidden" id="statusBanner">
+      <span class="status-icon" id="statusIcon"></span>
+      <span class="status-text" id="statusText"></span>
+    </div>
+
+    <!-- ── Runway Measurement Panel (Shown ONLY when on/near runway) ────── -->
+    <div class="panel hidden" id="runwayPanel">
+      <div class="panel-header">
+        <span class="panel-icon">🛬</span>
+        <span class="panel-title" id="runwayTitle">—</span>
+      </div>
+      <div class="panel-body">
+
+        <div class="info-row">
+          <span class="info-label">Runway</span>
+          <span class="info-value mono" id="runwayDesignator">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Surface</span>
+          <span class="info-value" id="runwaySurface">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Dimensions</span>
+          <span class="info-value" id="runwayDims">—</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Centerline Deviation -->
+        <div class="metric-section">
+          <div class="metric-label">Centerline Deviation</div>
+          <div class="deviation-bar-wrap">
+            <span class="bar-label">L</span>
+            <div class="deviation-bar-track">
+              <div class="deviation-bar-center"></div>
+              <div class="deviation-needle" id="deviationNeedle"></div>
+            </div>
+            <span class="bar-label">R</span>
+          </div>
+          <div class="deviation-values">
+            <span class="deviation-ft" id="deviationFt">— ft</span>
+            <span class="deviation-side" id="deviationSide">—</span>
+            <span class="deviation-m" id="deviationM">— m</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Touchdown Distance -->
+        <div class="metric-section">
+          <div class="metric-label">Distance from Threshold</div>
+          <div class="td-gauge-wrap">
+            <div class="td-gauge-track" id="tdGaugeTrack">
+              <div class="td-gauge-fill" id="tdGaugeFill"></div>
+              <div class="td-gauge-marker" id="tdGaugeMarker"></div>
+            </div>
+            <div class="td-gauge-labels">
+              <span>THR</span>
+              <span id="tdGaugeEnd">END</span>
+            </div>
+          </div>
+          <div class="td-values">
+            <div class="td-main">
+              <span class="td-ft" id="tdFt">—</span>
+              <span class="td-unit">ft</span>
+              <span class="td-sep">/</span>
+              <span class="td-m" id="tdM">—</span>
+              <span class="td-unit">m</span>
+            </div>
+            <div class="td-sub">
+              <span id="tdPct">—</span>% runway used
+            </div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Touchdown Zone + Remaining -->
+        <div class="tz-row">
+          <div class="tz-badge" id="tzBadge">—</div>
+          <div class="remaining-block">
+            <div class="remaining-label">Remaining</div>
+            <div class="remaining-value"><span id="remainingFt">—</span> ft / <span id="remainingM">—</span> m</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Full Multi-Source ATIS & METAR Feed Panel ────────────────────── -->
+    <div class="panel hidden" id="atisFeedsPanel">
+      <div class="panel-header">
+        <span class="panel-icon">📡</span>
+        <span class="panel-title">Airport Weather &amp; ATIS Feeds</span>
+      </div>
+      <div class="panel-body feeds-body" id="feedsContainer">
+        <!-- Injected via JavaScript -->
+      </div>
+    </div>
+
+    <!-- ── Airport Runways List (Filtered strictly to this airport) ──────── -->
+    <div class="panel hidden" id="nearbyPanel">
+      <div class="panel-header">
+        <span class="panel-icon">🛫</span>
+        <span class="panel-title" id="nearbyTitle">Airport Runways</span>
+      </div>
+      <div class="nearby-list" id="nearbyList"></div>
+    </div>
+
+    <!-- Footer -->
+    <div class="sidebar-footer">
+      <span>FAA GIS Geodetic Survey • Real ATIS • VATSIM • IVAO • METAR</span>
+      <span>MYTECHREVIEW / icao-runway-database</span>
+    </div>
+
+  </aside>
+
+  <!-- ── Map ──────────────────────────────────────────────────────────────── -->
+  <div id="map"></div>
+
+  <!-- ── Search Bar ───────────────────────────────────────────────────────── -->
+  <div class="search-bar">
+    <input type="text" id="airportSearch" placeholder="Go to airport… (e.g. KLGA, KJFK, EGLL)" spellcheck="false" />
+    <button id="searchBtn">Go</button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

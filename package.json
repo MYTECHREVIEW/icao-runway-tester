@@ -1,0 +1,13 @@
+{
+  "name": "icao-runway-tester",
+  "version": "1.0.0",
+  "description": "Interactive runway touchdown & centerline deviation tester",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
