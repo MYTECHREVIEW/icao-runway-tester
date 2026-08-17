@@ -1261,10 +1261,11 @@ async function drawAirportTerminals(data) {
   populateEditorTaxiwayDropdown(taxiSegs);
   populateEditorRunwayDropdown(data.runways || data.airport?.runways);
 
-  if (!map.hasLayer(gateLayerGroup)) gateLayerGroup.addTo(map);
-  if (!map.hasLayer(standLayerGroup)) standLayerGroup.addTo(map);
-  if (!map.hasLayer(editorLayerGroup)) editorLayerGroup.addTo(map);
-  if (!map.hasLayer(terminalLayerGroup)) terminalLayerGroup.addTo(map);
+  // Always ensure layer groups are active on the map
+  if (!map.hasLayer(gateLayerGroup)) map.addLayer(gateLayerGroup);
+  if (!map.hasLayer(standLayerGroup)) map.addLayer(standLayerGroup);
+  if (!map.hasLayer(editorLayerGroup)) map.addLayer(editorLayerGroup);
+  if (!map.hasLayer(terminalLayerGroup)) map.addLayer(terminalLayerGroup);
 
   if (!showTerminals && !isEditMode) {
     gateLayerGroup.clearLayers();
@@ -1358,7 +1359,7 @@ async function drawAirportTerminals(data) {
     const badgeMarker = L.marker([bay.lat, bay.lon], {
       draggable: isEditMode && currentEditorTab === 'gates' && !isTracingLeadIn && !isSnappingToTaxiway,
       autoPan: true,
-      zIndexOffset: 1500,
+      zIndexOffset: 2000,
       icon: L.divIcon({
         className: 'aviation-sign-icon',
         html: badgeHtml,
