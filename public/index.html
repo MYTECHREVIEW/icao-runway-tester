@@ -362,13 +362,15 @@
     <div class="editor-bar-header">
       <div class="editor-status-badge">
         <span class="pulse-dot"></span>
-        <span>VISUAL MAP &amp; LABEL EDITOR</span>
+        <span>MAP EDITING STUDIO</span>
       </div>
 
-      <!-- Editor Mode Tabs (Gates/Stands vs Taxiways) -->
+      <!-- Editor Mode Tabs -->
       <div class="editor-tab-group">
         <button id="tabEditGates" class="editor-tab active" onclick="window.switchEditorTab('gates')">🚪 Gates &amp; Stands</button>
-        <button id="tabEditTaxiways" class="editor-tab" onclick="window.switchEditorTab('taxiways')">🚖 Taxiways &amp; Lanes</button>
+        <button id="tabEditTaxiways" class="editor-tab" onclick="window.switchEditorTab('taxiways')">🚖 Taxiway Routing</button>
+        <button id="tabEditRunways" class="editor-tab" onclick="window.switchEditorTab('runways')">🛫 Runways</button>
+        <button id="tabEditHoldPoints" class="editor-tab" onclick="window.switchEditorTab('holdpoints')">🛑 Holding Spots</button>
       </div>
 
       <button id="editorBtnExit" class="editor-btn action-exit" title="Exit visual editor" onclick="window.toggleVisualEditorMode(false)">
@@ -394,46 +396,108 @@
           <option value="stand">🅿️ Stand</option>
         </select>
 
-        <button id="editorBtnApplyEdit" class="editor-btn action-apply" title="Apply number & type changes" onclick="window.applyBayEdits()">
+        <button id="editorBtnApplyEdit" class="editor-btn action-apply" title="Apply changes" onclick="window.applyBayEdits()">
           <span>✔️</span> Update
         </button>
 
         <div class="editor-divider"></div>
 
         <button id="editorBtnTraceLeadIn" class="editor-btn action-trace" title="Click waypoints from gate to taxiway" onclick="window.handleTraceButtonClick()">
-          <span>✏️</span> <span id="traceBtnText">Trace Lead-In</span>
+          <span>✏️</span> <span id="traceBtnText">Trace Path</span>
         </button>
 
         <button id="editorBtnJoinTaxiway" class="editor-btn action-join" title="Snap & weld lead-in path to a taxiway" onclick="window.startJoinToTaxiway()">
           <span>🔗</span> Join to Taxiway
         </button>
 
-        <button id="editorBtnClearLeadIn" class="editor-btn action-clear" title="Reset custom lead-in line" onclick="window.clearLeadInPath()">
-          <span>🔄</span> Reset Path
+        <button id="editorBtnSmoothCurve" class="editor-btn" style="background: rgba(168, 85, 247, 0.2); border-color: #a855f7; color: #c084fc;" title="Smooth path curvature" onclick="window.smoothSelectedPath()">
+          <span>✨</span> Smooth
         </button>
 
-        <button id="editorBtnDeleteBay" class="editor-btn action-delete" title="Delete selected spot" onclick="window.deleteSelectedBay()">
+        <button id="editorBtnClearLeadIn" class="editor-btn action-clear" title="Reset path" onclick="window.clearLeadInPath()">
+          <span>🔄</span> Reset
+        </button>
+
+        <button id="editorBtnDeleteBay" class="editor-btn action-delete" title="Delete spot" onclick="window.deleteSelectedBay()">
           <span>🗑️</span>
         </button>
       </div>
     </div>
 
-    <!-- 2. Active Taxiway / Taxilane Label Editor Row -->
+    <!-- 2. Active Taxiway Routing & Vertex Editor Row -->
     <div id="editorTaxiwaysRow" class="editor-edit-row hidden">
       <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
         <label style="font-size: 11px; color: var(--text-secondary); font-weight: 700;">Taxiway / Lane:</label>
-        <select id="editorTaxiwaySelect" class="editor-select" style="max-width: 140px;" onchange="window.selectTaxiwayForEditing(this.value)">
+        <select id="editorTaxiwaySelect" class="editor-select" style="max-width: 130px;" onchange="window.selectTaxiwayForEditing(this.value)">
           <option value="">-- Choose Taxiway --</option>
         </select>
 
-        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700; margin-left: 4px;">Sign / Ref:</span>
-        <input type="text" id="editorTaxiwayRefInput" class="editor-input" placeholder="e.g. LANE 8, B, G" style="width: 85px;" />
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Ref:</span>
+        <input type="text" id="editorTaxiwayRefInput" class="editor-input" placeholder="e.g. B, G, LANE 8" style="width: 85px;" />
 
-        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Full Name:</span>
-        <input type="text" id="editorTaxiwayNameInput" class="editor-input" placeholder="e.g. Ramp Taxilane 8" style="width: 160px;" />
+        <input type="text" id="editorTaxiwayNameInput" class="editor-input" placeholder="Display Name (e.g. B)" style="width: 120px;" />
 
         <button id="editorBtnApplyTaxiwayEdit" class="editor-btn action-apply" title="Apply taxiway label change" onclick="window.applyTaxiwayEdits()">
-          <span>✔️</span> Update Label
+          <span>✔️</span> Update
+        </button>
+
+        <div class="editor-divider"></div>
+
+        <button id="editorBtnAddTaxiVertex" class="editor-btn action-trace" title="Insert a new curve point" onclick="window.insertTaxiwayVertex()">
+          <span>➕</span> Add Vertex
+        </button>
+
+        <button id="editorBtnSmoothTaxiway" class="editor-btn" style="background: rgba(168, 85, 247, 0.2); border-color: #a855f7; color: #c084fc;" title="Smooth taxiway curve" onclick="window.smoothSelectedTaxiway()">
+          <span>✨</span> Smooth Curve
+        </button>
+      </div>
+    </div>
+
+    <!-- 3. Runway Calibration Transform Row -->
+    <div id="editorRunwaysRow" class="editor-edit-row hidden">
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <label style="font-size: 11px; color: var(--text-secondary); font-weight: 700;">Runway:</label>
+        <select id="editorRunwaySelect" class="editor-select" style="width: 110px;" onchange="window.selectRunwayForEditing(this.value)">
+          <option value="">-- Runway --</option>
+        </select>
+
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Heading / Angle:</span>
+        <input type="range" id="runwayAngleSlider" min="0" max="360" step="0.1" value="0" style="width: 100px; cursor: pointer;" oninput="window.handleRunwaySlider(this.value)" />
+        <input type="number" id="runwayAngleInput" class="editor-input" step="0.1" style="width: 60px;" onchange="window.handleRunwayAngleInput(this.value)" />
+        <span style="font-size: 11px; color: var(--text-muted);">°</span>
+
+        <button class="editor-btn" style="padding: 4px 6px;" title="Step angle -0.1°" onclick="window.stepRunwayAngle(-0.1)">-0.1°</button>
+        <button class="editor-btn" style="padding: 4px 6px;" title="Step angle +0.1°" onclick="window.stepRunwayAngle(0.1)">+0.1°</button>
+
+        <div class="editor-divider"></div>
+
+        <button id="editorBtnApplyRunway" class="editor-btn action-apply" title="Save runway calibration" onclick="window.saveRunwayChanges()">
+          <span>💾</span> Save Runway Calibration
+        </button>
+      </div>
+    </div>
+
+    <!-- 4. Labeled Holding Spots Row -->
+    <div id="editorHoldPointsRow" class="editor-edit-row hidden">
+      <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+        <label style="font-size: 11px; color: var(--text-secondary); font-weight: 700;">Shape:</label>
+        <select id="holdPointShapeSelect" class="editor-select" style="width: 120px;">
+          <option value="triangle">▲ Triangle Hold</option>
+          <option value="square">◼ Square Hold</option>
+          <option value="circle">● Circle Hold</option>
+        </select>
+
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">ID / Text:</span>
+        <input type="text" id="holdPointRefInput" class="editor-input" placeholder="e.g. B1, 04, CAT II" style="width: 110px;" />
+
+        <button id="btnAddHoldPoint" class="editor-btn action-apply" style="background: #eab308; color: #000; font-weight: 800;" onclick="window.createHoldPointAtCenter()">
+          <span>📍</span> Drop Hold Spot
+        </button>
+
+        <div class="editor-divider"></div>
+
+        <button id="btnSaveHoldPoints" class="editor-btn action-save" onclick="window.saveHoldPointsChanges()">
+          <span>💾</span> Save Hold Spots
         </button>
       </div>
     </div>

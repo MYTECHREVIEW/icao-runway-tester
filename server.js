@@ -95,6 +95,7 @@ if (!fs.existsSync(TERMINALS_CACHE_DIR)) {
 }
 const TERMINALS_DB_PATH = path.join(__dirname, 'data', 'terminals.json');
 const TAXIWAYS_DB_PATH = path.join(__dirname, 'data', 'taxiways.json');
+const RUNWAYS_DB_PATH = path.join(__dirname, 'data', 'runways-flat.json');
 
 let seedTerminals = {};
 try {
@@ -1283,6 +1284,98 @@ app.post('/api/taxiways/save', (req, res) => {
   }
 });
 
+
+// ── POST /api/runways/save — Persist Calibrated Runway Heading & Positions ─────
+
+app.post('/api/runways/save', (req, res) => {
+  try {
+    const { icao, runways } = req.body;
+    if (!icao || !Array.isArray(runways)) {
+      return res.status(400).json({ error: 'icao and runways array required' });
+    }
+
+    const upperIcao = icao.toUpperCase().trim();
+    
+    // 1. Update in-memory runwaysByIcao
+    const existingList = runwaysByIcao[upperIcao] || [];
+    runways.forEach(r => {
+      const match = existingList.find(ex => ex.id === r.id || (ex.le_ident === r.le_ident && ex.he_ident === r.he_ident));
+      if (match) {
+        if (r.latitude_deg !== undefined) match.latitude_deg = r.latitude_deg;
+        if (r.longitude_deg !== undefined) match.longitude_deg = r.longitude_deg;
+        if (r.he_heading_degT !== undefined) match.he_heading_degT = r.he_heading_degT;
+        if (r.le_heading_degT !== undefined) match.le_heading_degT = r.le_heading_degT;
+        if (r.length_ft !== undefined) match.length_ft = r.length_ft;
+        if (r.width_ft !== undefined) match.width_ft = r.width_ft;
+      }
+    });
+
+    // 2. Persist to data/runways-flat.json if present
+    if (fs.existsSync(RUNWAY_DB_PATH)) {
+      try {
+        const allRunways = [];
+        for (const list of Object.values(runwaysByIcao)) {
+          allRunways.push(...list);
+        }
+        fs.writeFileSync(RUNWAY_DB_PATH, JSON.stringify(allRunways, null, 2), 'utf8');
+      } catch (e) {
+        console.warn('Could not write full RUNWAY_DB_PATH', e);
+      }
+    }
+
+    console.log(`💾 [RUNWAYS PERSISTENCE] Saved ${runways.length} calibrated runways for ${upperIcao} to disk`);
+
+    return res.json({
+      success: true,
+      icao: upperIcao,
+      count: runways.length
+    });
+  } catch (err) {
+    console.error('Error saving runways:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/holdpoints/save — Persist Labeled Holding Position Symbols ────────
+
+app.post('/api/holdpoints/save', (req, res) => {
+  try {
+    const { icao, hold_points } = req.body;
+    if (!icao) {
+      return res.status(400).json({ error: 'icao is required' });
+    }
+
+    const upperIcao = icao.toUpperCase().trim();
+    const cleanHoldPoints = Array.isArray(hold_points) ? hold_points : [];
+
+    if (!seedTerminals[upperIcao]) {
+      seedTerminals[upperIcao] = { icao: upperIcao, terminals: [], gates: [], stands: [], bays: [] };
+    }
+    seedTerminals[upperIcao].hold_points = cleanHoldPoints;
+
+    // Persist to data/terminals.json on disk
+    let allDb = {};
+    if (fs.existsSync(TERMINALS_DB_PATH)) {
+      try { allDb = JSON.parse(fs.readFileSync(TERMINALS_DB_PATH, 'utf8')); } catch (e) { allDb = {}; }
+    }
+    if (!allDb[upperIcao]) allDb[upperIcao] = seedTerminals[upperIcao];
+    allDb[upperIcao].hold_points = cleanHoldPoints;
+    fs.writeFileSync(TERMINALS_DB_PATH, JSON.stringify(allDb, null, 2), 'utf8');
+
+    console.log(`💾 [HOLD POINTS PERSISTENCE] Saved ${cleanHoldPoints.length} hold short spots for ${upperIcao} to data/terminals.json`);
+
+    return res.json({
+      success: true,
+      icao: upperIcao,
+      count: cleanHoldPoints.length,
+      hold_points: cleanHoldPoints
+    });
+  } catch (err) {
+    console.error('Error saving hold points:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/terminals/save — Persist Calibrated Gates, Stands & Lead-In Paths ─
 
 app.post('/api/terminals/save', (req, res) => {
@@ -1389,7 +1482,7 @@ function parseToken(s, idx, runwayIdents) {
   let raw = s.toUpperCase().trim();
   let clean = raw;
   let type = "TWY";
-  let display = "TWY " + raw;
+  let display = raw;
 
   if (/^(RWY|RUNWAY|RW)/i.test(raw) || (idx === 0 && runwayIdents && runwayIdents.has(normalizeIdent(raw)))) {
     type = "RWY";
@@ -1413,7 +1506,7 @@ function parseToken(s, idx, runwayIdents) {
     display = "TERMINAL " + clean;
   } else {
     clean = normalizeIdent(raw);
-    display = "TWY " + clean;
+    display = clean;
   }
 
   return { raw, clean, type, display };

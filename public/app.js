@@ -1210,7 +1210,7 @@ async function drawAirportTerminals(data) {
   if (!data) data = lastResult;
   if (!data) return;
 
-  // If bays/gates/stands are not yet present in data, fetch from /api/terminals
+  // Load terminals / bays if missing
   if ((!data.bays || data.bays.length === 0) && (!data.gates || data.gates.length === 0) && (!data.stands || data.stands.length === 0)) {
     const icao = data.airport?.icao || data.active_runway?.airport_icao;
     if (icao) {
@@ -1222,6 +1222,7 @@ async function drawAirportTerminals(data) {
           data.gates = (tData.gates || []).filter(g => isValidAviationRef(g.ref));
           data.stands = (tData.stands || []).filter(s => isValidAviationRef(s.ref));
           data.bays = tData.bays || mergeGatesAndStandsClient(data.gates, data.stands);
+          data.hold_points = tData.hold_points || [];
         }
       } catch (e) {
         console.warn('Could not load bays for ' + icao, e);
@@ -1237,15 +1238,14 @@ async function drawAirportTerminals(data) {
   const gateBays = bays.filter(b => b.has_jetbridge);
   const standBays = bays.filter(b => !b.has_jetbridge);
 
-  // Update counts in sidebar
   const gateCountEl = document.getElementById('gateCount');
   const standCountEl = document.getElementById('standCount');
   if (gateCountEl) gateCountEl.textContent = gateBays.length;
   if (standCountEl) standCountEl.textContent = standBays.length;
 
-  // Populate editor dropdowns
   populateEditorBayDropdown(bays);
   populateEditorTaxiwayDropdown(data.taxiways?.segments);
+  populateEditorRunwayDropdown(data.runways || data.airport?.runways);
 
   if (!showTerminals && !isEditMode) return;
 
@@ -1253,7 +1253,7 @@ async function drawAirportTerminals(data) {
   if (!map.hasLayer(standLayerGroup)) map.addLayer(standLayerGroup);
   if (!map.hasLayer(editorLayerGroup)) map.addLayer(editorLayerGroup);
 
-  // Draw Unified Aircraft Parking Bays
+  // 1. Draw Unified Aircraft Parking Bays
   bays.forEach(bay => {
     if (!bay.lat || !bay.lon || !isValidAviationRef(bay.ref)) return;
 
@@ -1264,9 +1264,9 @@ async function drawAirportTerminals(data) {
     }
 
     const targetLayer = isGate ? gateLayerGroup : standLayerGroup;
-    const isSelected = isEditMode && selectedBayRef === bay.ref;
+    const isSelected = isEditMode && currentEditorTab === 'gates' && selectedBayRef === bay.ref;
 
-    // 1. Draw Custom Traced Lead-In Line with Draggable Handles in Edit Mode
+    // Custom Traced Lead-In Line
     if (bay.lead_in_coords && Array.isArray(bay.lead_in_coords) && bay.lead_in_coords.length >= 2) {
       const customLine = L.polyline(bay.lead_in_coords, {
         color: isSelected ? '#fde047' : '#eab308',
@@ -1276,7 +1276,7 @@ async function drawAirportTerminals(data) {
       });
       targetLayer.addLayer(customLine);
 
-      // Render Draggable Interactive Waypoint Handles in Edit Mode
+      // Draggable Handles in Edit Mode
       if (isEditMode && isSelected && !isTracingLeadIn && !isSnappingToTaxiway) {
         bay.lead_in_coords.forEach((pt, pIdx) => {
           const isStart = (pIdx === 0);
@@ -1286,7 +1286,7 @@ async function drawAirportTerminals(data) {
             draggable: true,
             icon: L.divIcon({
               className: 'lead-in-handle-wrapper',
-              html: `<div class="lead-in-handle ${isStart ? 'handle-start' : (isEnd ? 'handle-end' : 'handle-mid')}" title="${isStart ? 'Parking Stop' : (isEnd ? 'Taxilane Connection' : 'Waypoint ' + pIdx)}"></div>`,
+              html: `<div class="lead-in-handle ${isStart ? 'handle-start' : (isEnd ? 'handle-end' : 'handle-mid')}" title="${isStart ? 'Parking Stop' : (isEnd ? 'Taxiway Connection' : 'Waypoint ' + pIdx)}"></div>`,
               iconSize: [14, 14],
               iconAnchor: [7, 7]
             })
@@ -1322,7 +1322,7 @@ async function drawAirportTerminals(data) {
       }
     }
 
-    // 2. Aircraft Parking Stop Line (T-bar / stop box)
+    // Aircraft Parking Stop Line (T-bar / stop box)
     const tBar = L.circleMarker([bay.lat, bay.lon], {
       radius: isSelected ? 7 : 4.5,
       color: isSelected ? '#facc15' : (isGate ? '#c084fc' : '#eab308'),
@@ -1333,11 +1333,11 @@ async function drawAirportTerminals(data) {
     });
     targetLayer.addLayer(tBar);
 
-    // 3. Single Unified Clean Number Badge
+    // Number Badge
     const badgeHtml = `<div class="bay-badge ${isGate ? 'gate' : 'stand'} ${isEditMode ? 'editing' : ''} ${isSelected ? 'selected' : ''}" onclick="window.selectBayFromBadge('${bay.ref}', event)" id="bay-marker-${bay.ref}">${bay.ref}</div>`;
 
     const badgeMarker = L.marker([bay.lat, bay.lon], {
-      draggable: isEditMode && !isTracingLeadIn && !isSnappingToTaxiway,
+      draggable: isEditMode && currentEditorTab === 'gates' && !isTracingLeadIn && !isSnappingToTaxiway,
       icon: L.divIcon({
         className: 'bay-icon-wrapper',
         html: badgeHtml,
@@ -1368,6 +1368,9 @@ async function drawAirportTerminals(data) {
     targetLayer.addLayer(badgeMarker);
   });
 
+  // 2. Draw Holding Spot Symbols
+  drawHoldPoints(data);
+
   updateEditorToolbar();
 }
 
@@ -1376,33 +1379,33 @@ window.selectBayFromBadge = function(ref, e) {
   selectBayForEditing(ref);
 };
 
-// ── Visual Editor State & Tab Switcher ────────────────────────────────────────
+// ── Studio Tabs & State Machine ───────────────────────────────────────────────
 
 let currentEditorTab = 'gates';
 let isSnappingToTaxiway = false;
 let snapClickListener = null;
+let selectedRunwayId = null;
+let runwayCenterHandle = null;
 
 function switchEditorTab(tabName) {
   currentEditorTab = tabName;
-  const tabGates = document.getElementById('tabEditGates');
-  const tabTaxiways = document.getElementById('tabEditTaxiways');
-  const rowGates = document.getElementById('editorGatesRow');
-  const rowTaxiways = document.getElementById('editorTaxiwaysRow');
+  ['gates', 'taxiways', 'runways', 'holdpoints'].forEach(t => {
+    const tabBtn = document.getElementById('tabEdit' + t.charAt(0).toUpperCase() + t.slice(1));
+    const rowEl = document.getElementById('editor' + t.charAt(0).toUpperCase() + t.slice(1) + 'Row');
+    if (tabBtn) tabBtn.classList.toggle('active', t === tabName);
+    if (rowEl) rowEl.classList.toggle('hidden', t !== tabName);
+  });
 
-  if (tabName === 'gates') {
-    if (tabGates) tabGates.classList.add('active');
-    if (tabTaxiways) tabTaxiways.classList.remove('active');
-    if (rowGates) rowGates.classList.remove('hidden');
-    if (rowTaxiways) rowTaxiways.classList.add('hidden');
-  } else {
-    if (tabGates) tabGates.classList.remove('active');
-    if (tabTaxiways) tabTaxiways.classList.add('active');
-    if (rowGates) rowGates.classList.add('hidden');
-    if (rowTaxiways) rowTaxiways.classList.remove('hidden');
-    if (lastResult && lastResult.taxiways) {
-      populateEditorTaxiwayDropdown(lastResult.taxiways.segments);
+  if (tabName === 'taxiways' && lastResult?.taxiways?.segments) {
+    populateEditorTaxiwayDropdown(lastResult.taxiways.segments);
+    if (!selectedTaxiwayRef && lastResult.taxiways.segments.length > 0) {
+      selectTaxiwayForEditing(lastResult.taxiways.segments[0].ref);
     }
+  } else if (tabName === 'runways' && lastResult) {
+    populateEditorRunwayDropdown(lastResult.runways || lastResult.airport?.runways);
   }
+
+  drawAirportTerminals(lastResult);
 }
 window.switchEditorTab = switchEditorTab;
 
@@ -1433,7 +1436,7 @@ function toggleVisualEditorMode(forceState) {
       selectedBayRef = lastResult.bays[0].ref;
     }
 
-    showEditorToast('✏️ Visual Editor Active: Edit gates, stands, taxiways, and join paths.');
+    showEditorToast('✏️ Visual Map Editing Studio Active');
   } else {
     if (btnToggle) btnToggle.classList.remove('active');
     if (btnText) btnText.textContent = 'Visual Editor Mode';
@@ -1452,6 +1455,8 @@ function toggleVisualEditorMode(forceState) {
   drawAirportTerminals(lastResult);
 }
 window.toggleVisualEditorMode = toggleVisualEditorMode;
+
+// ── Dropdown Populators ───────────────────────────────────────────────────────
 
 function populateEditorBayDropdown(bays) {
   const selectEl = document.getElementById('editorBaySelect');
@@ -1526,7 +1531,7 @@ function applyBayEdits() {
 }
 window.applyBayEdits = applyBayEdits;
 
-// ── Taxiway Label Editor ──────────────────────────────────────────────────────
+// ── Taxiway Routing & Vertex Editor ──────────────────────────────────────────
 
 function populateEditorTaxiwayDropdown(segments) {
   const selectEl = document.getElementById('editorTaxiwaySelect');
@@ -1543,7 +1548,7 @@ function populateEditorTaxiwayDropdown(segments) {
   sortedRefs.forEach(r => {
     const opt = document.createElement('option');
     opt.value = r;
-    opt.textContent = `🚖 ${r}`;
+    opt.textContent = `${r}`;
     if (r === selectedTaxiwayRef) opt.selected = true;
     selectEl.appendChild(opt);
   });
@@ -1562,11 +1567,85 @@ function selectTaxiwayForEditing(ref) {
 
   if (lastResult && lastResult.taxiways?.segments) {
     const matching = lastResult.taxiways.segments.filter(s => s.ref && s.ref.toUpperCase().trim() === ref);
-    const sampleName = matching.find(s => s.name)?.name || ('Taxiway ' + ref);
+    const sampleName = matching.find(s => s.name)?.name || ref;
     if (nameInput) nameInput.value = sampleName;
   }
+
+  renderTaxiwayVertexHandles();
 }
 window.selectTaxiwayForEditing = selectTaxiwayForEditing;
+
+function renderTaxiwayVertexHandles() {
+  editorLayerGroup.clearLayers();
+  if (!isEditMode || currentEditorTab !== 'taxiways' || !selectedTaxiwayRef || !lastResult?.taxiways?.segments) return;
+
+  const matchingSegs = lastResult.taxiways.segments.filter(s => s.ref && s.ref.toUpperCase().trim() === selectedTaxiwayRef);
+
+  matchingSegs.forEach(seg => {
+    const coords = seg.coordinates || [];
+    coords.forEach((pt, vIdx) => {
+      const handleMarker = L.marker(pt, {
+        draggable: true,
+        icon: L.divIcon({
+          className: 'lead-in-handle-wrapper',
+          html: `<div class="taxi-vertex-handle" title="${seg.ref} Vertex ${vIdx + 1}"></div>`,
+          iconSize: [12, 12],
+          iconAnchor: [6, 6]
+        })
+      });
+
+      handleMarker.on('drag', (e) => {
+        const newCoord = [e.target.getLatLng().lat, e.target.getLatLng().lng];
+        seg.coordinates[vIdx] = newCoord;
+        if (lastResult.taxiways) drawTaxiways(lastResult.taxiways);
+      });
+
+      handleMarker.on('dragend', (e) => {
+        const newCoord = [e.target.getLatLng().lat, e.target.getLatLng().lng];
+        seg.coordinates[vIdx] = newCoord;
+        showEditorToast(`📍 Moved ${seg.ref} vertex to ${newCoord[0].toFixed(6)}, ${newCoord[1].toFixed(6)}`);
+        saveTaxiwayChanges(true);
+        if (lastResult.taxiways) drawTaxiways(lastResult.taxiways);
+      });
+
+      editorLayerGroup.addLayer(handleMarker);
+    });
+  });
+}
+
+function insertTaxiwayVertex() {
+  if (!selectedTaxiwayRef || !lastResult?.taxiways?.segments) return;
+  const seg = lastResult.taxiways.segments.find(s => s.ref && s.ref.toUpperCase().trim() === selectedTaxiwayRef);
+  if (!seg || !seg.coordinates || seg.coordinates.length < 2) return;
+
+  // Insert midpoint between first two vertices
+  const p1 = seg.coordinates[0];
+  const p2 = seg.coordinates[1];
+  const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+  seg.coordinates.splice(1, 0, mid);
+
+  showEditorToast(`➕ Added vertex to ${seg.ref} (now ${seg.coordinates.length} vertices)`);
+  saveTaxiwayChanges(true);
+  if (lastResult.taxiways) drawTaxiways(lastResult.taxiways);
+  renderTaxiwayVertexHandles();
+}
+window.insertTaxiwayVertex = insertTaxiwayVertex;
+
+function smoothSelectedTaxiway() {
+  if (!selectedTaxiwayRef || !lastResult?.taxiways?.segments) return;
+  const seg = lastResult.taxiways.segments.find(s => s.ref && s.ref.toUpperCase().trim() === selectedTaxiwayRef);
+  if (!seg || !seg.coordinates || seg.coordinates.length < 3) {
+    showEditorToast('⚠️ Smoothing requires at least 3 vertices.');
+    return;
+  }
+
+  seg.coordinates = chaikinSmooth(seg.coordinates, 2);
+  showEditorToast(`✨ Smoothed ${seg.ref} centerline curvature (${seg.coordinates.length} points)`);
+  saveTaxiwayChanges(true);
+  if (lastResult.taxiways) drawTaxiways(lastResult.taxiways);
+  renderTaxiwayVertexHandles();
+}
+window.smoothSelectedTaxiway = smoothSelectedTaxiway;
 
 async function applyTaxiwayEdits() {
   if (!selectedTaxiwayRef || !lastResult || !lastResult.taxiways?.segments) return;
@@ -1576,7 +1655,7 @@ async function applyTaxiwayEdits() {
   if (!refInput) return;
 
   const newRef = refInput.value.trim().toUpperCase();
-  const newName = nameInput ? nameInput.value.trim() : ('Taxiway ' + newRef);
+  const newName = nameInput ? nameInput.value.trim() : newRef;
   if (!newRef) {
     alert('Taxiway identifier cannot be empty.');
     return;
@@ -1623,6 +1702,255 @@ async function saveTaxiwayChanges(isSilent = false) {
 }
 window.saveTaxiwayChanges = saveTaxiwayChanges;
 
+// ── Runway Calibration Transform Tool ────────────────────────────────────────
+
+function populateEditorRunwayDropdown(runways) {
+  const selectEl = document.getElementById('editorRunwaySelect');
+  if (!selectEl) return;
+
+  selectEl.innerHTML = '<option value="">-- Runway --</option>';
+  (runways || []).forEach(r => {
+    const opt = document.createElement('option');
+    const rId = r.id || (r.le_ident + '/' + r.he_ident);
+    opt.value = rId;
+    opt.textContent = `RWY ${r.le_ident}/${r.he_ident}`;
+    if (rId === selectedRunwayId) opt.selected = true;
+    selectEl.appendChild(opt);
+  });
+}
+
+function selectRunwayForEditing(id) {
+  if (!id) return;
+  selectedRunwayId = id;
+
+  const selectEl = document.getElementById('editorRunwaySelect');
+  if (selectEl) selectEl.value = id;
+
+  const runways = lastResult?.runways || lastResult?.airport?.runways || [];
+  const rwy = runways.find(r => (r.id === id || (r.le_ident + '/' + r.he_ident) === id));
+  if (!rwy) return;
+
+  const heading = rwy.he_heading_degT || rwy.le_heading_degT || 0;
+  const slider = document.getElementById('runwayAngleSlider');
+  const input = document.getElementById('runwayAngleInput');
+  if (slider) slider.value = heading;
+  if (input) input.value = heading.toFixed(1);
+
+  renderRunwayCenterHandle(rwy);
+}
+window.selectRunwayForEditing = selectRunwayForEditing;
+
+function renderRunwayCenterHandle(rwy) {
+  editorLayerGroup.clearLayers();
+  if (!rwy || !rwy.latitude_deg || !rwy.longitude_deg) return;
+
+  const centerMarker = L.marker([rwy.latitude_deg, rwy.longitude_deg], {
+    draggable: true,
+    icon: L.divIcon({
+      className: 'lead-in-handle-wrapper',
+      html: '<div class="runway-center-handle" title="Drag to translate runway laterally"></div>',
+      iconSize: [18, 18],
+      iconAnchor: [9, 9]
+    })
+  });
+
+  centerMarker.on('drag', (e) => {
+    const newPos = e.target.getLatLng();
+    const dLat = newPos.lat - rwy.latitude_deg;
+    const dLon = newPos.lng - rwy.longitude_deg;
+    rwy.latitude_deg = newPos.lat;
+    rwy.longitude_deg = newPos.lng;
+    if (rwy.le_latitude_deg) rwy.le_latitude_deg += dLat;
+    if (rwy.le_longitude_deg) rwy.le_longitude_deg += dLon;
+    if (rwy.he_latitude_deg) rwy.he_latitude_deg += dLat;
+    if (rwy.he_longitude_deg) rwy.he_longitude_deg += dLon;
+    drawRunwayPolygons(lastResult);
+  });
+
+  centerMarker.on('dragend', () => {
+    showEditorToast(`📍 Moved RWY ${rwy.le_ident}/${rwy.he_ident} center to ${rwy.latitude_deg.toFixed(6)}, ${rwy.longitude_deg.toFixed(6)}`);
+    saveRunwayChanges(true);
+  });
+
+  editorLayerGroup.addLayer(centerMarker);
+}
+
+function handleRunwaySlider(val) {
+  const heading = parseFloat(val);
+  const input = document.getElementById('runwayAngleInput');
+  if (input) input.value = heading.toFixed(1);
+  updateRunwayRotation(heading);
+}
+window.handleRunwaySlider = handleRunwaySlider;
+
+function handleRunwayAngleInput(val) {
+  const heading = parseFloat(val);
+  const slider = document.getElementById('runwayAngleSlider');
+  if (slider) slider.value = heading;
+  updateRunwayRotation(heading);
+}
+window.handleRunwayAngleInput = handleRunwayAngleInput;
+
+function stepRunwayAngle(delta) {
+  const input = document.getElementById('runwayAngleInput');
+  if (!input) return;
+  let curr = parseFloat(input.value) || 0;
+  curr = (curr + delta + 360) % 360;
+  input.value = curr.toFixed(1);
+  const slider = document.getElementById('runwayAngleSlider');
+  if (slider) slider.value = curr;
+  updateRunwayRotation(curr);
+}
+window.stepRunwayAngle = stepRunwayAngle;
+
+function updateRunwayRotation(heading) {
+  const runways = lastResult?.runways || lastResult?.airport?.runways || [];
+  const rwy = runways.find(r => (r.id === selectedRunwayId || (r.le_ident + '/' + r.he_ident) === selectedRunwayId));
+  if (!rwy) return;
+
+  rwy.he_heading_degT = heading;
+  rwy.le_heading_degT = (heading + 180) % 360;
+  drawRunwayPolygons(lastResult);
+}
+
+async function saveRunwayChanges(isSilent = false) {
+  const runways = lastResult?.runways || lastResult?.airport?.runways || [];
+  const icao = lastResult?.airport?.icao || currentIcao || 'KLGA';
+
+  try {
+    const res = await fetch('/api/runways/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ icao: icao, runways: runways })
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (!isSilent) showEditorToast(`💾 Saved ${data.count} calibrated runways for ${icao} to database!`);
+    }
+  } catch (e) {
+    if (!isSilent) alert('Error saving runways: ' + e.message);
+  }
+}
+window.saveRunwayChanges = saveRunwayChanges;
+
+// ── Holding Position Markers ──────────────────────────────────────────────────
+
+function drawHoldPoints(data) {
+  const holdPoints = data.hold_points || [];
+  holdPoints.forEach(hp => {
+    if (!hp.lat || !hp.lon) return;
+    const shape = hp.shape || 'triangle';
+    const refText = hp.ref || '';
+
+    const markerHtml = `<div class="hold-spot-marker ${shape}" title="Holding Position ${refText}"><span>${refText}</span></div>`;
+
+    const hpMarker = L.marker([hp.lat, hp.lon], {
+      draggable: isEditMode && currentEditorTab === 'holdpoints',
+      icon: L.divIcon({
+        className: 'hold-spot-wrapper',
+        html: markerHtml,
+        iconSize: null,
+        iconAnchor: [11, 11]
+      })
+    });
+
+    if (isEditMode) {
+      hpMarker.on('dragend', (e) => {
+        hp.lat = e.target.getLatLng().lat;
+        hp.lon = e.target.getLatLng().lng;
+        showEditorToast(`📍 Moved Hold Spot ${refText} to ${hp.lat.toFixed(6)}, ${hp.lon.toFixed(6)}`);
+        saveHoldPointsChanges(true);
+      });
+    }
+
+    editorLayerGroup.addLayer(hpMarker);
+  });
+}
+
+function createHoldPointAtCenter() {
+  if (!lastResult) return;
+  const shapeSelect = document.getElementById('holdPointShapeSelect');
+  const refInput = document.getElementById('holdPointRefInput');
+  const shape = shapeSelect ? shapeSelect.value : 'triangle';
+  const ref = refInput && refInput.value.trim() ? refInput.value.trim().toUpperCase() : 'B1';
+
+  const center = map.getCenter();
+  if (!lastResult.hold_points) lastResult.hold_points = [];
+
+  const newHp = {
+    id: 'hp_' + Date.now(),
+    shape: shape,
+    ref: ref,
+    name: 'Hold Short ' + ref,
+    lat: center.lat,
+    lon: center.lng,
+    heading: 0
+  };
+
+  lastResult.hold_points.push(newHp);
+  showEditorToast(`📍 Created ${shape.toUpperCase()} Hold Spot "${ref}" at center. Drag to taxiway/runway intersection.`);
+  saveHoldPointsChanges(true);
+  drawAirportTerminals(lastResult);
+}
+window.createHoldPointAtCenter = createHoldPointAtCenter;
+
+async function saveHoldPointsChanges(isSilent = false) {
+  if (!lastResult) return;
+  const icao = lastResult.airport?.icao || currentIcao || 'KLGA';
+  const holdPoints = lastResult.hold_points || [];
+
+  try {
+    const res = await fetch('/api/holdpoints/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ icao: icao, hold_points: holdPoints })
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (!isSilent) showEditorToast(`💾 Saved ${data.count} holding spots for ${icao} to database!`);
+    }
+  } catch (e) {
+    if (!isSilent) alert('Error saving hold points: ' + e.message);
+  }
+}
+window.saveHoldPointsChanges = saveHoldPointsChanges;
+
+// ── Path Curvature Spline Smoother ────────────────────────────────────────────
+
+function smoothSelectedPath() {
+  if (!selectedBayRef || !lastResult?.bays) return;
+  const bay = lastResult.bays.find(b => b.ref === selectedBayRef);
+  if (!bay || !bay.lead_in_coords || bay.lead_in_coords.length < 3) {
+    showEditorToast('⚠️ Smoothing requires at least 3 path waypoints.');
+    return;
+  }
+
+  bay.lead_in_coords = chaikinSmooth(bay.lead_in_coords, 2);
+  showEditorToast(`✨ Smoothed lead-in curve for ${bay.ref} (${bay.lead_in_coords.length} points)`);
+  saveEditorChanges(true);
+  drawAirportTerminals(lastResult);
+}
+window.smoothSelectedPath = smoothSelectedPath;
+
+function chaikinSmooth(points, iterations = 2) {
+  let pts = [...points];
+  for (let iter = 0; iter < iterations; iter++) {
+    const refined = [];
+    refined.push(pts[0]);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i];
+      const p1 = pts[i + 1];
+      const q = [0.75 * p0[0] + 0.25 * p1[0], 0.75 * p0[1] + 0.25 * p1[1]];
+      const r = [0.25 * p0[0] + 0.75 * p1[0], 0.25 * p0[1] + 0.75 * p1[1]];
+      refined.push(q);
+      refined.push(r);
+    }
+    refined.push(pts[pts.length - 1]);
+    pts = refined;
+  }
+  return pts;
+}
+
 // ── Interactive "Join / Snap to Taxiway" Feature ──────────────────────────────
 
 function startJoinToTaxiway() {
@@ -1661,7 +1989,6 @@ function startJoinToTaxiway() {
     if (!isSnappingToTaxiway) return;
     const clickLatLng = e.latlng;
     
-    // Find closest taxiway segment and snap coordinate
     let closestCoord = null;
     let closestTaxiwayName = null;
     let minD = Infinity;
@@ -1679,11 +2006,9 @@ function startJoinToTaxiway() {
     });
 
     if (closestCoord && minD < 120.0) {
-      // Weld the lead-in line endpoint to this exact taxiway coordinate
       if (!bay.lead_in_coords || bay.lead_in_coords.length < 2) {
         bay.lead_in_coords = [[bay.lat, bay.lon], closestCoord];
       } else {
-        // Replace the end of the line with the snapped coordinate
         bay.lead_in_coords[bay.lead_in_coords.length - 1] = closestCoord;
       }
 
@@ -1731,13 +2056,13 @@ function updateEditorToolbar() {
   const btnClear = document.getElementById('editorBtnClearLeadIn');
 
   if (!lastResult || !lastResult.bays || !selectedBayRef) {
-    if (infoEl) infoEl.textContent = 'Click any gate badge on map or choose from dropdown';
+    if (infoEl) infoEl.textContent = 'Click any badge on map or choose from dropdown';
     return;
   }
 
   const bay = lastResult.bays.find(b => b.ref === selectedBayRef);
   if (!bay) {
-    if (infoEl) infoEl.textContent = 'Click any gate badge on map or choose from dropdown';
+    if (infoEl) infoEl.textContent = 'Click any badge on map or choose from dropdown';
     return;
   }
 
@@ -1747,7 +2072,7 @@ function updateEditorToolbar() {
 
   const hasLeadIn = bay.lead_in_coords && bay.lead_in_coords.length >= 2;
   if (infoEl) {
-    infoEl.innerHTML = `Pos: ${bay.lat.toFixed(5)}, ${bay.lon.toFixed(5)} ${hasLeadIn ? '<span style="color:#facc15; font-weight:800;">[Traced Path: ' + bay.lead_in_coords.length + ' pts]</span>' : '<span style="color:#94a3b8;">[Direct Connector]</span>'}`;
+    infoEl.innerHTML = `Pos: ${bay.lat.toFixed(5)}, ${bay.lon.toFixed(5)} ${hasLeadIn ? '<span style="color:#facc15; font-weight:800;">[Path: ' + bay.lead_in_coords.length + ' pts]</span>' : '<span style="color:#94a3b8;">[Direct Connector]</span>'}`;
   }
 
   if (btnClear) {
@@ -1785,11 +2110,10 @@ function startTracingLeadIn() {
     return;
   }
 
-  cancelTracingLeadIn(); // clear any previous listeners
+  cancelTracingLeadIn();
   cancelJoinToTaxiway();
 
   isTracingLeadIn = true;
-  // Start line directly at the selected bay parking spot!
   currentTraceCoords = [[bay.lat, bay.lon]];
   
   const mapContainer = document.getElementById('map');
@@ -1809,7 +2133,6 @@ function startTracingLeadIn() {
 
   map.doubleClickZoom.disable();
 
-  // Initial waypoint dot at the bay position
   const startDot = L.circleMarker([bay.lat, bay.lon], {
     radius: 6,
     color: '#10b981',
@@ -1821,7 +2144,6 @@ function startTracingLeadIn() {
   editorLayerGroup.addLayer(startDot);
   traceDotLayers.push(startDot);
 
-  // Hook Leaflet map click and mousemove directly
   map.on('click', handleTraceMapClick);
   map.on('mousemove', handleTraceMapMove);
 
@@ -1837,7 +2159,6 @@ function handleTraceMapClick(e) {
   const countSpan = document.getElementById('tracingWaypointCount');
   if (countSpan) countSpan.textContent = `(${currentTraceCoords.length} points added)`;
 
-  // Render solid live polyline
   if (traceLineLayer) editorLayerGroup.removeLayer(traceLineLayer);
   traceLineLayer = L.polyline(currentTraceCoords, {
     color: '#facc15',
@@ -1912,7 +2233,7 @@ function cancelTracingLeadIn() {
   const btnTrace = document.getElementById('editorBtnTraceLeadIn');
   const traceText = document.getElementById('traceBtnText');
   if (btnTrace) btnTrace.classList.remove('active');
-  if (traceText) traceText.textContent = 'Trace Lead-In';
+  if (traceText) traceText.textContent = 'Trace Path';
 
   map.off('click', handleTraceMapClick);
   map.off('mousemove', handleTraceMapMove);

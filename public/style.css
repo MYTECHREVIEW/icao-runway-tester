@@ -1800,3 +1800,92 @@ input:checked + .slider:before {
   50% { transform: scale(1.3); box-shadow: 0 0 16px #38bdf8; }
   100% { transform: scale(0.9); box-shadow: 0 0 8px #38bdf8; }
 }
+
+
+/* ── Labeled Holding Spot Symbols (Triangles, Squares, Circles) ─────────────── */
+
+.hold-spot-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+.hold-spot-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 900;
+  font-size: 10px;
+  color: #ffffff;
+  user-select: none;
+  cursor: grab;
+  transition: transform 0.15s ease;
+}
+.hold-spot-marker:hover {
+  transform: scale(1.25);
+}
+
+.hold-spot-marker.triangle {
+  width: 0;
+  height: 0;
+  border-left: 14px solid transparent;
+  border-right: 14px solid transparent;
+  border-bottom: 24px solid #ef4444;
+  position: relative;
+  filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.9));
+}
+.hold-spot-marker.triangle span {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: #ffffff;
+  text-shadow: 0 1px 2px #000;
+}
+
+.hold-spot-marker.square {
+  width: 22px;
+  height: 22px;
+  background: #dc2626;
+  border: 2px solid #ffffff;
+  border-radius: 3px;
+  box-shadow: 0 0 10px rgba(220, 38, 38, 0.8), 0 0 4px #000;
+}
+
+.hold-spot-marker.circle {
+  width: 22px;
+  height: 22px;
+  background: #eab308;
+  color: #000000;
+  border: 2px solid #000000;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(234, 179, 8, 0.8), 0 0 4px #000;
+}
+
+/* Taxiway vertex editing handles */
+.taxi-vertex-handle {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #38bdf8;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 8px #38bdf8;
+  cursor: grab;
+  transition: transform 0.15s ease;
+}
+.taxi-vertex-handle:hover {
+  transform: scale(1.4);
+  background: #0284c7;
+}
+
+/* Runway calibration overlay */
+.runway-center-handle {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #10b981;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 0 14px #10b981;
+  cursor: grab;
+}

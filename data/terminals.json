@@ -2653,6 +2653,32 @@
         "heading": 0,
         "max_wingspan_m": null
       }
+    ],
+    "hold_points": [
+      {
+        "id": "hp_b1",
+        "shape": "triangle",
+        "ref": "B1",
+        "name": "Hold Short B1",
+        "lat": 40.7765,
+        "lon": -73.871
+      },
+      {
+        "id": "hp_04",
+        "shape": "square",
+        "ref": "04-22",
+        "name": "Runway Hold 04-22",
+        "lat": 40.7758,
+        "lon": -73.8725
+      },
+      {
+        "id": "hp_cat2",
+        "shape": "circle",
+        "ref": "CAT II",
+        "name": "ILS Critical Area",
+        "lat": 40.775,
+        "lon": -73.873
+      }
     ]
   },
   "KJFK": {
