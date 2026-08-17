@@ -441,8 +441,11 @@
 
         <div class="editor-divider"></div>
 
-        <button id="editorBtnRetraceTaxiway" class="editor-btn action-trace" style="background: #0284c7; color:#fff;" title="Re-draw this taxiway path by clicking waypoints" onclick="window.startRetracingTaxiway()">
-          <span>✏️</span> Re-trace Path
+        <button id="editorBtnNewTaxiway" class="editor-btn action-add" style="background: #0284c7; color:#fff;" title="Create and draw a new taxiway" onclick="window.startCreatingNewTaxiway()">
+          <span>➕</span> New Taxiway
+        </button>
+        <button id="editorBtnRetraceTaxiway" class="editor-btn action-trace" style="background: rgba(56, 189, 248, 0.2); border-color:#38bdf8; color:#38bdf8;" title="Re-draw this taxiway path by clicking waypoints" onclick="window.startRetracingTaxiway()">
+          <span>✏️</span> Re-trace
         </button>
 
         <button id="editorBtnAddTaxiVertex" class="editor-btn" style="background: rgba(56, 189, 248, 0.2); border-color:#38bdf8; color:#38bdf8;" title="Insert a new curve point" onclick="window.insertTaxiwayVertex()">

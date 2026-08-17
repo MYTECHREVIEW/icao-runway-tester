@@ -1889,3 +1889,42 @@ input:checked + .slider:before {
   box-shadow: 0 0 14px #10b981;
   cursor: grab;
 }
+
+
+/* ── High-Contrast Large Touch Handles ─────────────────────────────────────── */
+
+.lead-in-handle {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  border: 3px solid #ffffff !important;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.8), 0 0 8px currentColor !important;
+  cursor: grab !important;
+  transition: transform 0.1s ease !important;
+}
+.lead-in-handle:hover {
+  transform: scale(1.4) !important;
+}
+.lead-in-handle:active {
+  cursor: grabbing !important;
+  transform: scale(1.5) !important;
+}
+
+.taxi-vertex-handle {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  background: #38bdf8 !important;
+  border: 3px solid #ffffff !important;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.9), 0 0 4px #000 !important;
+  cursor: grab !important;
+  transition: transform 0.1s ease !important;
+}
+.taxi-vertex-handle:hover {
+  transform: scale(1.4) !important;
+  background: #0284c7 !important;
+}
+.taxi-vertex-handle:active {
+  cursor: grabbing !important;
+  transform: scale(1.5) !important;
+}
