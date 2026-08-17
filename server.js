@@ -80,6 +80,132 @@ for (const [icao, apt] of Object.entries(airportsDb)) {
 }
 console.log(`  ✅ Spatial grids built (Runways: ${Object.keys(runwayGrid).length.toLocaleString()} cells, Airports: ${Object.keys(airportGrid).length.toLocaleString()} cells)\n`);
 
+
+// ── Airport Taxiway Engine with Local Caching & NOTAM Closure Mapping ────────
+
+const TAXIWAY_CACHE_DIR = path.join(__dirname, 'data', 'taxiways-cache');
+if (!fs.existsSync(TAXIWAY_CACHE_DIR)) {
+    try { fs.mkdirSync(TAXIWAY_CACHE_DIR, { recursive: true }); } catch (e) {}
+}
+
+let seedTaxiways = {};
+try {
+    const seedPath = fs.existsSync(path.join(__dirname, 'data', 'taxiways.json'))
+        ? path.join(__dirname, 'data', 'taxiways.json')
+        : path.join(__dirname, '..', 'icao-taxiway-database', 'data', 'taxiways.json');
+    if (fs.existsSync(seedPath)) {
+        seedTaxiways = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+        console.log(`  ✅ Loaded taxiway seed database for ${Object.keys(seedTaxiways).length} airports`);
+    }
+} catch (e) {
+    console.warn('  ⚠️ Taxiway seed database not loaded:', e.message);
+}
+
+const querystring = require('querystring');
+
+function queryOverpassTaxiways(lat, lon) {
+    const query = `[out:json][timeout:15];(way["aeroway"~"taxiway|taxilane"](around:3800,${lat},${lon}););out geom;`;
+    const postData = querystring.stringify({ data: query });
+
+    const endpoints = [
+        'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+        'https://overpass-api.de/api/interpreter'
+    ];
+
+    return new Promise((resolve) => {
+        let tried = 0;
+        function tryNext() {
+            if (tried >= endpoints.length) return resolve([]);
+            const ep = endpoints[tried++];
+            const urlObj = new URL(ep);
+
+            const req = https.request({
+                hostname: urlObj.hostname,
+                path: urlObj.pathname,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Content-Length': Buffer.byteLength(postData),
+                    'User-Agent': 'MYTECHREVIEW/icao-taxiway-database'
+                },
+                timeout: 8000
+            }, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                    try {
+                        const raw = JSON.parse(data);
+                        if (raw && raw.elements && raw.elements.length > 0) {
+                            const segments = [];
+                            for (const elem of raw.elements) {
+                                const tags = elem.tags || {};
+                                const geom = elem.geometry || [];
+                                if (!geom || geom.length < 2) continue;
+
+                                const ref = tags.ref || tags.name || null;
+                                let widthFt = 75;
+                                if (tags.width) {
+                                    const parsed = parseFloat(String(tags.width).replace('m', '').trim());
+                                    if (!isNaN(parsed)) widthFt = Math.round(parsed * 3.28084);
+                                }
+
+                                segments.push({
+                                    id: elem.id,
+                                    ref: ref ? ref.toUpperCase() : null,
+                                    name: ref ? `Taxiway ${ref.toUpperCase()}` : 'Taxiway',
+                                    type: tags.aeroway || 'taxiway',
+                                    surface: tags.surface || 'asphalt',
+                                    width_ft: widthFt,
+                                    width_m: Math.round(widthFt * 0.3048),
+                                    coordinates: geom.map(n => [Number(n.lat.toFixed(6)), Number(n.lon.toFixed(6))])
+                                });
+                            }
+                            return resolve(segments);
+                        }
+                    } catch (e) {}
+                    tryNext();
+                });
+            });
+            req.on('error', () => tryNext());
+            req.on('timeout', () => { req.destroy(); tryNext(); });
+            req.write(postData);
+            req.end();
+        }
+        tryNext();
+    });
+}
+
+async function getAirportTaxiways(icao, lat, lon) {
+    if (!icao) return [];
+    icao = icao.toUpperCase().trim();
+
+    // 1. Check in-memory seed DB
+    if (seedTaxiways[icao] && seedTaxiways[icao].segments) {
+        return seedTaxiways[icao].segments;
+    }
+
+    // 2. Check disk cache
+    const cacheFile = path.join(TAXIWAY_CACHE_DIR, `${icao}.json`);
+    if (fs.existsSync(cacheFile)) {
+        try {
+            return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+        } catch (e) {}
+    }
+
+    // 3. Dynamic Overpass fetch
+    if (lat === undefined || lon === undefined) {
+        const apt = airportsDb[icao];
+        if (apt) { lat = apt.latitude; lon = apt.longitude; }
+    }
+    if (lat === undefined || lon === undefined) return [];
+
+    const segments = await queryOverpassTaxiways(lat, lon);
+    if (segments.length > 0) {
+        try { fs.writeFileSync(cacheFile, JSON.stringify(segments)); } catch (e) {}
+    }
+    return segments;
+}
+
 // ── Geodesic Math ─────────────────────────────────────────────────────────────
 
 const EARTH_RADIUS_M = 6371000;
@@ -583,6 +709,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
 const DEFAULT_MB = Buffer.from('cGsuZXlKMUlqb2liWGwwWldOb2NtVjJhV1YzSWl3aVlTSTZJbU50YTNJM2JXTjVlVEJpTnpBelpuQjFkM3BuTm1WMWFXMGlmUS5lM1A2MG9ybF93U0NVYjUtMVJKR3pn', 'base64').toString('utf8');
+
+app.get('/api/taxiways', async (req, res) => {
+    const icao = (req.query.icao || '').toUpperCase().trim();
+    if (!icao) return res.status(400).json({ error: 'icao is required' });
+    const taxiways = await getAirportTaxiways(icao);
+    res.json({ icao, count: taxiways.length, taxiways });
+});
+
 app.get('/api/config', (req, res) => {
     res.json({
         mapboxToken: process.env.MAPBOX_TOKEN || DEFAULT_MB
@@ -712,6 +846,54 @@ app.post('/api/analyze', async (req, res) => {
     const isNearRunwayScope = analyzedRunways.some(r => r.analysis.near_runway || r.analysis.on_runway);
     const activeRunway = onRunway || (isNearRunwayScope ? analyzedRunways[0] : null);
 
+    // 5. Fetch & Correlate Taxiways with NOTAMs
+    const rawTaxiways = selectedAirportIcao ? await getAirportTaxiways(selectedAirportIcao, primaryAirport?.latitude, primaryAirport?.longitude) : [];
+    const analyzedTaxiways = rawTaxiways.map(twy => {
+        let isClosed = false;
+        let closureReason = null;
+        if (twy.ref && operationalCtx && operationalCtx.notams) {
+            const matchingNotam = operationalCtx.notams.find(n => 
+                n.type === 'TAXIWAY_APRON' && 
+                new RegExp(`\b(?:TAXIWAY|TWY)\s+${twy.ref}\b`, 'i').test(n.text)
+            );
+            if (matchingNotam) {
+                isClosed = true;
+                closureReason = matchingNotam.text;
+            }
+        }
+        return {
+            ...twy,
+            is_closed: isClosed,
+            closure_reason: closureReason
+        };
+    });
+
+    let onTaxiway = false;
+    let activeTaxiway = null;
+
+    if (!onRunway && analyzedTaxiways.length > 0) {
+        let closestDist = Infinity;
+        let closestTwy = null;
+
+        for (const twy of analyzedTaxiways) {
+            const distM = distanceToPolylineM(lat, lon, twy.coordinates);
+            const halfWidthM = (twy.width_m || 23) / 2 + 5;
+            if (distM <= halfWidthM && distM < closestDist) {
+                closestDist = distM;
+                closestTwy = {
+                    ...twy,
+                    distance_to_centerline_m: Math.round(distM * 10) / 10,
+                    distance_to_centerline_ft: Math.round(distM * FT_PER_M * 10) / 10
+                };
+            }
+        }
+
+        if (closestTwy) {
+            onTaxiway = true;
+            activeTaxiway = closestTwy;
+        }
+    }
+
     res.json({
         lat, lon,
         airport: primaryAirport ? {
@@ -731,6 +913,9 @@ app.post('/api/analyze', async (req, res) => {
         on_runway: !!onRunway,
         within_runway_scope: isNearRunwayScope,
         active_runway: activeRunway,
+        on_taxiway: onTaxiway,
+        active_taxiway: activeTaxiway,
+        taxiways: analyzedTaxiways,
         runways: analyzedRunways
     });
 });
@@ -738,3 +923,42 @@ app.post('/api/analyze', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`\n🗺  ICAO Runway Tester running at: http://localhost:${PORT}`);
 });
+
+// ── Point-to-Polyline Geodesic Distance for Taxiway Detection ────────────────
+
+function distanceToSegmentM(pLat, pLon, aLat, aLon, bLat, bLon) {
+    const lat1 = aLat * RAD, lon1 = aLon * RAD;
+    const lat2 = bLat * RAD, lon2 = bLon * RAD;
+    const pL   = pLat * RAD, pLo  = pLon * RAD;
+
+    // Planar projection around centroid (highly accurate for airport scale < 5km)
+    const cosLat = Math.cos((lat1 + lat2) / 2);
+    const x1 = 0, y1 = 0;
+    const x2 = (lon2 - lon1) * cosLat * EARTH_RADIUS_M;
+    const y2 = (lat2 - lat1) * EARTH_RADIUS_M;
+    const px = (pLo - lon1) * cosLat * EARTH_RADIUS_M;
+    const py = (pL - lat1) * EARTH_RADIUS_M;
+
+    const dx = x2 - x1, dy = y2 - y1;
+    const segLenSq = dx * dx + dy * dy;
+    if (segLenSq < 1e-6) return haversine(pLat, pLon, aLat, aLon);
+
+    let t = (px * dx + py * dy) / segLenSq;
+    t = Math.max(0, Math.min(1, t));
+
+    const projX = x1 + t * dx;
+    const projY = y1 + t * dy;
+    const distSq = (px - projX) ** 2 + (py - projY) ** 2;
+    return Math.sqrt(distSq);
+}
+
+function distanceToPolylineM(pLat, pLon, coords) {
+    let minDist = Infinity;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const [aLat, aLon] = coords[i];
+        const [bLat, bLon] = coords[i+1];
+        const d = distanceToSegmentM(pLat, pLon, aLat, aLon, bLat, bLon);
+        if (d < minDist) minDist = d;
+    }
+    return minDist;
+}

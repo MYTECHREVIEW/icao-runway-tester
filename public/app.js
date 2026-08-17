@@ -1,15 +1,17 @@
 /**
  * app.js — Runway Analyzer Map Frontend
- * High-Precision Geodetic Alignments, Real-Time NOTAMs & Closed Runway Highlighting
+ * High-Precision Geodetic Alignments, Real-Time NOTAMs & Dynamic Taxiway Network Layer
  */
 
 'use strict';
 
 const MAPBOX_STORAGE_KEY = 'icao_mapbox_token';
 const SOURCE_PREF_KEY = 'icao_atis_source_pref';
+const SHOW_TAXIWAYS_KEY = 'icao_show_taxiways';
 
 let mapboxToken = localStorage.getItem(MAPBOX_STORAGE_KEY) || '';
 let userSourcePref = localStorage.getItem(SOURCE_PREF_KEY) || 'real_world';
+let showTaxiways = localStorage.getItem(SHOW_TAXIWAYS_KEY) !== 'false';
 
 // ── Tile Layers ───────────────────────────────────────────────────────────────
 
@@ -46,10 +48,12 @@ const TILES = {
 
 // ── Map Init ──────────────────────────────────────────────────────────────────
 
+const taxiwayLayerGroup = L.layerGroup();
+
 const map = L.map('map', {
   center: [40.777, -73.872],  // Default: KLGA
   zoom: 16,
-  layers: [fallbackGoogle],
+  layers: [fallbackGoogle, taxiwayLayerGroup],
   zoomControl: true
 });
 
@@ -59,7 +63,9 @@ let layerControl = L.control.layers({
   '🇺🇸 USGS Orthoimagery': TILES.usgs,
   '🛰 Esri World Imagery': TILES.esri,
   '🌑 Dark Map (No Labels)': TILES.dark
-}, {}, { position: 'bottomright' }).addTo(map);
+}, {
+  '🚖 Taxiway Network': taxiwayLayerGroup
+}, { position: 'bottomright' }).addTo(map);
 
 // ── Fetch Server Config & Apply High-Precision Mapbox Tiles ───────────────────
 
@@ -103,10 +109,11 @@ let currentCoords  = null;
 
 // ── Marker Icon Factory ───────────────────────────────────────────────────────
 
-function pinIcon(onRunway, isClosed) {
+function pinIcon(onRunway, isClosed, onTaxiway) {
   let cls = 'pin-marker';
   if (isClosed) cls += ' closed-runway';
   else if (onRunway) cls += ' on-runway';
+  else if (onTaxiway) cls += ' on-taxiway';
 
   return L.divIcon({
     className: '',
@@ -150,14 +157,57 @@ function computeRunwayPolygon(leLat, leLon, heLat, heLon, widthFt) {
   return [c1, c2, c3, c4];
 }
 
-// ── Draw Runway Layers ────────────────────────────────────────────────────────
+// ── Draw Runway & Taxiway Layers ──────────────────────────────────────────────
 
 function clearRunwayLayers() {
   runwayLayers.forEach(l => map.removeLayer(l));
   runwayLayers = [];
+  taxiwayLayerGroup.clearLayers();
   if (devLineLayer) {
     map.removeLayer(devLineLayer);
     devLineLayer = null;
+  }
+}
+
+function drawTaxiways(taxiways) {
+  if (!taxiways || !Array.isArray(taxiways)) return;
+  taxiwayLayerGroup.clearLayers();
+
+  const renderedLabels = new Set();
+
+  for (const twy of taxiways) {
+    if (!twy.coordinates || twy.coordinates.length < 2) continue;
+
+    const isClosed = twy.is_closed;
+    const color = isClosed ? '#ff4757' : '#f1c40f';
+    const weight = isClosed ? 3.5 : 2.5;
+    const dash = isClosed ? '5,5' : null;
+
+    const line = L.polyline(twy.coordinates, {
+      color,
+      weight,
+      dashArray: dash,
+      opacity: 0.88,
+      lineCap: 'round',
+      lineJoin: 'round'
+    });
+    taxiwayLayerGroup.addLayer(line);
+
+    // Add taxiway designator label along midpoint
+    if (twy.ref && !renderedLabels.has(twy.ref)) {
+      renderedLabels.add(twy.ref);
+      const midIdx = Math.floor(twy.coordinates.length / 2);
+      const [mLat, mLon] = twy.coordinates[midIdx];
+
+      const badgeHtml = isClosed
+        ? `<div class="twy-map-badge closed">🚫 ${twy.ref} [CLSD]</div>`
+        : `<div class="twy-map-badge">${twy.ref}</div>`;
+
+      const badge = L.marker([mLat, mLon], {
+        icon: L.divIcon({ className: '', html: badgeHtml, iconAnchor: [10, 8] })
+      });
+      taxiwayLayerGroup.addLayer(badge);
+    }
   }
 }
 
@@ -172,12 +222,10 @@ function drawRunways(data) {
       rwy.airport_icao === data.active_runway.airport_icao &&
       rwy.le_ident === data.active_runway.le_ident;
 
-    // Determine colors: Red for closed, Green for active touchdown, Blue for standard
     let polyColor = isClosed ? '#ff4757' : (isActive ? (data.on_runway ? '#00ff88' : '#00d4ff') : 'rgba(0,212,255,0.45)');
     let polyFill  = isClosed ? 'rgba(255, 71, 87, 0.35)' : (isActive ? (data.on_runway ? 'rgba(0,255,136,0.18)' : 'rgba(0,212,255,0.12)') : 'rgba(0,212,255,0.05)');
     let lineColor = isClosed ? '#ff4757' : (isActive ? '#00ff88' : 'rgba(0,212,255,0.6)');
 
-    // 1. Runway Surface Boundary Polygon
     const polyCoords = computeRunwayPolygon(rwy.le_latitude, rwy.le_longitude, rwy.he_latitude, rwy.he_longitude, rwy.width_ft);
     const poly = L.polygon(polyCoords, {
       color: polyColor,
@@ -187,7 +235,6 @@ function drawRunways(data) {
     }).addTo(map);
     runwayLayers.push(poly);
 
-    // 2. Centerline Polyline
     const line = L.polyline(
       [[rwy.le_latitude, rwy.le_longitude], [rwy.he_latitude, rwy.he_longitude]],
       {
@@ -199,7 +246,6 @@ function drawRunways(data) {
     ).addTo(map);
     runwayLayers.push(line);
 
-    // 3. Threshold Badges
     const leBadgeHtml = isClosed
       ? `<div style="background:#ff4757;color:#fff;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800;padding:3px 7px;border:1px solid #fff;border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(255,71,87,0.7);">🚫 RW ${rwy.le_ident} [CLSD]</div>`
       : `<div style="background:rgba(10,13,20,0.9);color:#00d4ff;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:700;padding:3px 7px;border:1px solid rgba(0,212,255,0.6);border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.7);">${rwy.le_ident}</div>`;
@@ -220,7 +266,7 @@ function drawRunways(data) {
     if (heLabel) runwayLayers.push(heLabel);
   }
 
-  // 4. Draw Perpendicular Deviation Line ONLY if on or near runway
+  // Perpendicular Deviation Line
   if (data.within_runway_scope && data.active_runway && data.active_runway.analysis) {
     const ar = data.active_runway;
     const a = ar.analysis;
@@ -267,6 +313,11 @@ function drawRunways(data) {
     }).addTo(map);
     runwayLayers.push(centerPoint);
   }
+
+  // Draw Taxiway Layer
+  if (data.taxiways) {
+    drawTaxiways(data.taxiways);
+  }
 }
 
 // ── UI Updaters ───────────────────────────────────────────────────────────────
@@ -291,7 +342,6 @@ function renderNotamsPanel(operational, icao) {
   document.getElementById('notamsTitle').textContent = `${icao || ''} Active NOTAMs (${operational.notams.length})`;
   notamsContainer.innerHTML = '';
 
-  // Sort: Closure NOTAMs first
   const sorted = [...operational.notams].sort((a, b) => (b.is_closure ? 1 : 0) - (a.is_closure ? 1 : 0));
 
   sorted.forEach(n => {
@@ -408,7 +458,7 @@ function renderFeedsPanel(operational) {
 
 function updateResults(data) {
   lastResult = data;
-  const { on_runway, within_runway_scope, airport, operational, active_runway: rwy, runways } = data;
+  const { on_runway, on_taxiway, active_taxiway: twy, within_runway_scope, airport, operational, active_runway: rwy, runways } = data;
 
   // 1. Coordinates card
   document.getElementById('coordsCard').classList.remove('hidden');
@@ -529,6 +579,41 @@ function updateResults(data) {
       `;
       pinMarker.bindPopup(popupHtml, { autoClose: false, closeOnClick: false, offset: [0, -10], maxWidth: 500 }).openPopup();
 
+    } else if (on_taxiway && twy) {
+      // ── TAXIWAY ON-PIN NOTIFICATION CARD ──
+      const elevStr = airport?.elevation_ft !== null ? `${fmt(airport.elevation_ft)} ft (${fmt(airport.elevation_m)} m)` : '—';
+      const isClosed = twy.is_closed;
+
+      const badgeHtml = isClosed
+        ? `<span class="rwy-active-badge closed">🚫 TWY ${twy.ref || ''} CLOSED</span>`
+        : `<span class="twy-active-badge">🚖 TWY ${twy.ref || 'Taxiway'}</span>`;
+
+      const closedNoticeHtml = isClosed
+        ? `<div class="closed-rwy-notice">⚠️ TAXIWAY ${twy.ref || ''} CLOSED BY NOTAM</div>`
+        : '';
+
+      const popupHtml = `
+        <div class="pin-popup-card taxiway-popup">
+          <div class="pin-popup-badge-row">
+            ${badgeHtml}
+            <span class="rwy-source-badge">${sourceTag}</span>
+            <span class="airport-elev-badge">▲ ${elevStr}</span>
+          </div>
+          <div class="pin-popup-name">${airport ? airport.name : airport?.icao}</div>
+          <div class="pin-popup-location">📍 ${twy.name} &bull; Width: ${twy.width_ft} ft (${twy.surface})</div>
+
+          ${closedNoticeHtml}
+
+          <div class="pin-popup-op-strip">
+            <div class="op-row">
+              <span class="op-label">💨 Wind:</span>
+              <span class="op-val">${windStr}</span>
+            </div>
+          </div>
+        </div>
+      `;
+      pinMarker.bindPopup(popupHtml, { autoClose: false, closeOnClick: false, offset: [0, -10], maxWidth: 500 }).openPopup();
+
     } else if (airport) {
       // ── AIRPORT GROUNDS NOTIFICATION CARD ──
       const locStr = [airport.city, airport.country_name || airport.country].filter(Boolean).join(', ') || 'Airport grounds';
@@ -588,6 +673,12 @@ function updateResults(data) {
       icon.textContent = '✅';
       text.textContent = `On Runway ${rwy.analysis?.runway_end_ident || ''} (${operational?.source_label || 'Active'})`;
     }
+  } else if (on_taxiway && twy) {
+    banner.classList.add('near-runway');
+    icon.textContent = '🚖';
+    text.textContent = twy.is_closed
+      ? `On Closed Taxiway ${twy.ref || ''} (NOTAM)`
+      : `On Taxiway ${twy.ref || ''} (${airport?.icao || ''})`;
   } else if (within_runway_scope && rwy) {
     banner.classList.add('near-runway');
     icon.textContent = '⚠️';
@@ -622,7 +713,6 @@ function updateResults(data) {
         ? `${fmt(rwy.length_ft)} ft × ${fmt(rwy.width_ft)} ft (${fmt(rwy.length_m, 0)} m × ${fmt(rwy.width_m, 0)} m)`
         : '—';
 
-    // Centerline Deviation
     const devFt   = a.deviation_ft;
     const devM    = a.deviation_m;
     const maxDev  = Math.max(100, Math.abs(devFt) * 1.5);
@@ -640,7 +730,6 @@ function updateResults(data) {
       : a.side === 'right'  ? '#fd79a8'
       : 'var(--accent)';
 
-    // Touchdown Distance Gauge
     const tdFt  = a.distance_from_threshold_ft;
     const tdM   = a.distance_from_threshold_m;
     const pctRwy = Math.min(Math.max(a.pct_runway_used || 0, 0), 100);
@@ -653,7 +742,6 @@ function updateResults(data) {
     document.getElementById('tdGaugeEnd').textContent =
       rwy.length_ft ? `${(rwy.length_ft / 1000).toFixed(1)}k ft` : 'END';
 
-    // Touchdown Zone Badge
     const tz    = a.touchdown_zone || 'UNKNOWN';
     const badge = document.getElementById('tzBadge');
     badge.textContent = tz.replace('_', ' ');
@@ -743,8 +831,9 @@ async function analyzePoint(lat, lon) {
     drawRunways(data);
 
     if (pinMarker) {
-      const isClosed = data.active_runway && (data.active_runway.is_closed || data.active_runway.analysis?.is_closed);
-      pinMarker.setIcon(pinIcon(data.on_runway, isClosed));
+      const isClosed = (data.active_runway && (data.active_runway.is_closed || data.active_runway.analysis?.is_closed)) ||
+                       (data.active_taxiway && data.active_taxiway.is_closed);
+      pinMarker.setIcon(pinIcon(data.on_runway, isClosed, data.on_taxiway));
     }
 
   } catch (err) {
@@ -753,9 +842,9 @@ async function analyzePoint(lat, lon) {
   }
 }
 
-// ── Source Selection Handlers ─────────────────────────────────────────────────
+// ── Controls & Event Listeners ────────────────────────────────────────────────
 
-function initSourceControls() {
+function initControls() {
   const pills = document.querySelectorAll('.source-pill');
   pills.forEach(p => {
     if (p.dataset.source === userSourcePref) {
@@ -775,6 +864,24 @@ function initSourceControls() {
       }
     });
   });
+
+  const twyToggle = document.getElementById('taxiwayToggle');
+  if (twyToggle) {
+    twyToggle.checked = showTaxiways;
+    if (!showTaxiways) {
+      map.removeLayer(taxiwayLayerGroup);
+    }
+
+    twyToggle.addEventListener('change', (e) => {
+      showTaxiways = e.target.checked;
+      localStorage.setItem(SHOW_TAXIWAYS_KEY, showTaxiways);
+      if (showTaxiways) {
+        map.addLayer(taxiwayLayerGroup);
+      } else {
+        map.removeLayer(taxiwayLayerGroup);
+      }
+    });
+  }
 }
 
 // ── Map Click ─────────────────────────────────────────────────────────────────
@@ -788,7 +895,7 @@ map.on('click', (e) => {
     pinMarker.setLatLng([lat, lng]);
   } else {
     pinMarker = L.marker([lat, lng], {
-      icon: pinIcon(false, false),
+      icon: pinIcon(false, false, false),
       draggable: true
     }).addTo(map);
 
@@ -828,6 +935,6 @@ document.getElementById('airportSearch').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') goToAirport(e.target.value);
 });
 
-initSourceControls();
+initControls();
 showLoading(false);
-console.log('🛬 ICAO Runway Analyzer ready with NOTAMs integration.');
+console.log('🛬 ICAO Runway Analyzer ready with Taxiway Network layer.');

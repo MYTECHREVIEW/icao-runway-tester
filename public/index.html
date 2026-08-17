@@ -51,6 +51,30 @@
       <div class="coords-value" id="coordsValue">—</div>
     </div>
 
+    
+    <!-- ── Map Layers & Display Settings ──────────────────────────────── -->
+    <div class="panel" id="displaySettingsPanel">
+      <div class="panel-header">
+        <span class="panel-icon">🗺️</span>
+        <span class="panel-title">Map Layers &amp; Overlays</span>
+      </div>
+      <div class="panel-body">
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <span class="toggle-icon">🚖</span>
+            <div>
+              <div class="toggle-title">Taxiway Network</div>
+              <div class="toggle-desc">Centerlines, designations &amp; closures</div>
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="taxiwayToggle" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Airport Info Card ───────────────────────────────────────────── -->
     <div class="airport-card hidden" id="airportCard">
       <div class="airport-header">

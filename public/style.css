@@ -1150,3 +1150,123 @@ body {
   align-items: center;
   gap: 6px;
 }
+
+/* ── Layer Settings Toggle Switch ────────────────────────────────────────── */
+.toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.toggle-label-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toggle-icon {
+  font-size: 18px;
+}
+
+.toggle-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.toggle-desc {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-base);
+  border: 1px solid var(--border);
+  transition: .3s;
+  border-radius: 22px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--text-muted);
+  transition: .3s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: rgba(241, 196, 15, 0.25);
+  border-color: #f1c40f;
+}
+
+input:checked + .slider:before {
+  transform: translateX(16px);
+  background-color: #f1c40f;
+  box-shadow: 0 0 8px rgba(241, 196, 15, 0.8);
+}
+
+/* ── Taxiway Map Badges & Pin Card ───────────────────────────────────────── */
+.twy-map-badge {
+  background: rgba(10, 14, 23, 0.92);
+  color: #f1c40f;
+  border: 1px solid rgba(241, 196, 15, 0.6);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 5px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+
+.twy-map-badge.closed {
+  background: var(--red);
+  color: #fff;
+  border: 1px solid #fff;
+  box-shadow: 0 0 8px rgba(255, 71, 87, 0.8);
+}
+
+.pin-popup-card.taxiway-popup {
+  border-left: 5px solid #f1c40f;
+}
+
+.twy-active-badge {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--bg-base);
+  background: #f1c40f;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.pin-marker.on-taxiway {
+  background: radial-gradient(circle at 35% 35%, #f1c40f, #d4ac0d);
+  box-shadow: 0 4px 12px rgba(241, 196, 15, 0.7);
+}
