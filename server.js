@@ -93,6 +93,7 @@ const TERMINALS_CACHE_DIR = path.join(__dirname, 'data', 'terminals-cache');
 if (!fs.existsSync(TERMINALS_CACHE_DIR)) {
     try { fs.mkdirSync(TERMINALS_CACHE_DIR, { recursive: true }); } catch (e) {}
 }
+const TERMINALS_DB_PATH = path.join(__dirname, 'data', 'terminals.json');
 
 let seedTerminals = {};
 try {
@@ -1271,7 +1272,7 @@ app.post('/api/terminals/save', (req, res) => {
         cleanStands.push({
           id: b.stand_id || parseInt('100' + String(idx).padStart(5, '0')),
           ref: refStr,
-          name: b.name || ('Stand ' + refStr),
+          name: 'Stand ' + refStr,
           max_wingspan_m: b.max_wingspan_m || null,
           lat: b.lat,
           lon: b.lon,
@@ -1291,25 +1292,25 @@ app.post('/api/terminals/save', (req, res) => {
     // 1. Update in-memory seed DB
     seedTerminals[upperIcao] = airportData;
 
-    // 2. Persist to data/terminals.json
-    try {
-      let allDb = {};
-      if (fs.existsSync(TERMINALS_DB_PATH)) {
+    // 2. Persist to data/terminals.json on disk
+    let allDb = {};
+    if (fs.existsSync(TERMINALS_DB_PATH)) {
+      try {
         allDb = JSON.parse(fs.readFileSync(TERMINALS_DB_PATH, 'utf8'));
+      } catch (e) {
+        allDb = {};
       }
-      allDb[upperIcao] = airportData;
-      fs.writeFileSync(TERMINALS_DB_PATH, JSON.stringify(allDb, null, 2));
-    } catch (e) {
-      console.warn('Could not write to terminals.json:', e.message);
     }
+    allDb[upperIcao] = airportData;
+    fs.writeFileSync(TERMINALS_DB_PATH, JSON.stringify(allDb, null, 2), 'utf8');
 
     // 3. Persist to disk cache
     try {
       const cacheFile = path.join(TERMINALS_CACHE_DIR, `${upperIcao}.json`);
-      fs.writeFileSync(cacheFile, JSON.stringify(airportData, null, 2));
+      fs.writeFileSync(cacheFile, JSON.stringify(airportData, null, 2), 'utf8');
     } catch (e) {}
 
-    console.log(`💾 Successfully saved ${cleanBays.length} parking positions and lead-in lines for ${upperIcao}`);
+    console.log(`💾 [DISK PERSISTENCE] Successfully wrote ${cleanBays.length} parking positions & lead-in curves for ${upperIcao} to data/terminals.json`);
 
     return res.json({
       success: true,
