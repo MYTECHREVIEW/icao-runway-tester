@@ -59,11 +59,12 @@ const TILES = {
 // ── Map Init ──────────────────────────────────────────────────────────────────
 
 const taxiwayLayerGroup = L.layerGroup();
+const taxiRouteLayerGroup = L.layerGroup();
 
 const map = L.map('map', {
   center: [40.777, -73.872],  // Default: KLGA
   zoom: 16,
-  layers: showTaxiways ? [fallbackGoogle, taxiwayLayerGroup] : [fallbackGoogle],
+  layers: showTaxiways ? [fallbackGoogle, taxiwayLayerGroup, taxiRouteLayerGroup] : [fallbackGoogle, taxiRouteLayerGroup],
   zoomControl: true
 });
 
@@ -165,6 +166,7 @@ function clearRunwayLayers() {
   runwayLayers.forEach(l => map.removeLayer(l));
   runwayLayers = [];
   taxiwayLayerGroup.clearLayers();
+  taxiRouteLayerGroup.clearLayers();
   if (devLineLayer) {
     map.removeLayer(devLineLayer);
     devLineLayer = null;
@@ -1068,6 +1070,157 @@ async function analyzePoint(lat, lon) {
   }
 }
 
+
+// ── Progressive Taxi Route Generator ──────────────────────────────────────────
+
+let activeTaxiRoute = null;
+
+async function generateTaxiRoute(routeStr) {
+  if (!routeStr || !routeStr.trim()) return;
+  const icao = lastResult?.airport?.icao || (lastResult?.active_runway?.airport_icao);
+  if (!icao) {
+    alert('Please click on an airport on the map or search an airport first!');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/taxi-route', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ icao, route: routeStr })
+    });
+    const data = await res.json();
+    if (data.error) {
+      alert('Taxi Route Error: ' + data.error);
+      return;
+    }
+
+    activeTaxiRoute = data;
+    renderTaxiRoute(data);
+  } catch (err) {
+    console.error('Taxi routing failed:', err);
+  }
+}
+
+function clearTaxiRoute() {
+  activeTaxiRoute = null;
+  taxiRouteLayerGroup.clearLayers();
+  const summaryEl = document.getElementById('taxiRouteSummary');
+  if (summaryEl) {
+    summaryEl.innerHTML = '';
+    summaryEl.classList.add('hidden');
+  }
+  const inputEl = document.getElementById('taxiRouteInput');
+  if (inputEl) inputEl.value = '';
+}
+
+function renderTaxiRoute(data) {
+  taxiRouteLayerGroup.clearLayers();
+
+  // Ensure taxiways are visible
+  if (!showTaxiways) {
+    showTaxiways = true;
+    localStorage.setItem(SHOW_TAXIWAYS_KEY, 'true');
+    const toggleEl = document.getElementById('taxiwayToggle');
+    if (toggleEl) toggleEl.checked = true;
+    if (!map.hasLayer(taxiwayLayerGroup)) map.addLayer(taxiwayLayerGroup);
+    if (lastResult?.taxiways) drawTaxiways(lastResult.taxiways);
+  }
+
+  const { legs, total_distance_ft, total_distance_m, est_time_sec, has_closures } = data;
+
+  // Render each leg with glowing clearance casing and sequential step numbers
+  legs.forEach((leg, idx) => {
+    if (!leg.coordinates || leg.coordinates.length < 2) return;
+
+    const isClosed = leg.is_closed;
+    const glowColor = isClosed ? '#ff4757' : '#00d4ff';
+    const coreColor = isClosed ? '#ff4757' : '#00ff88';
+
+    // Outer glow casing
+    const glowLine = L.polyline(leg.coordinates, {
+      color: glowColor,
+      weight: 8,
+      opacity: 0.45,
+      lineCap: 'round',
+      lineJoin: 'round'
+    });
+    taxiRouteLayerGroup.addLayer(glowLine);
+
+    // Inner core progressive line
+    const coreLine = L.polyline(leg.coordinates, {
+      color: coreColor,
+      weight: 4,
+      opacity: 1,
+      dashArray: isClosed ? '6,6' : null,
+      lineCap: 'round',
+      lineJoin: 'round'
+    });
+    taxiRouteLayerGroup.addLayer(coreLine);
+
+    // Step waypoint badge at start of leg
+    const [startLat, startLon] = leg.coordinates[0];
+    const badgeHtml = isClosed
+      ? `<div class="twy-map-badge closed" style="border:2px solid #fff;box-shadow:0 0 16px rgba(255,71,87,1);">⛔ ${leg.step}. TWY ${leg.ref} [CLSD]</div>`
+      : `<div class="twy-map-badge" style="background:#00ff88;color:#0a0d14;border:2px solid #fff;font-weight:900;box-shadow:0 0 14px rgba(0,255,136,0.9);">${leg.step}. TWY ${leg.ref}</div>`;
+
+    const stepMarker = L.marker([startLat, startLon], {
+      icon: L.divIcon({
+        className: 'aviation-sign-icon',
+        html: badgeHtml,
+        iconSize: null,
+        iconAnchor: [0, 0]
+      })
+    });
+    taxiRouteLayerGroup.addLayer(stepMarker);
+
+    // If final leg, add Finish Hold-Short flag
+    if (idx === legs.length - 1) {
+      const [endLat, endLon] = leg.coordinates[leg.coordinates.length - 1];
+      const endMarker = L.marker([endLat, endLon], {
+        icon: L.divIcon({
+          className: 'aviation-sign-icon',
+          html: `<div class="rwy-map-badge" style="background:#00d4ff;color:#0a0d14;border:2px solid #fff;font-weight:900;">🏁 HOLD SHORT ${leg.ref}</div>`,
+          iconSize: null,
+          iconAnchor: [0, 0]
+        })
+      });
+      taxiRouteLayerGroup.addLayer(endMarker);
+    }
+  });
+
+  // Update Sidebar Summary
+  const summaryEl = document.getElementById('taxiRouteSummary');
+  if (summaryEl) {
+    summaryEl.classList.remove('hidden');
+
+    const estMin = (est_time_sec / 60).toFixed(1);
+    const closureNotice = has_closures
+      ? `<div style="color:#ff4757;font-weight:700;font-size:10px;margin-top:2px;">⚠️ WARNING: Route crosses NOTAM closed taxiway!</div>`
+      : '';
+
+    const breadcrumbs = legs.map(l => {
+      const col = l.is_closed ? '#ff4757' : 'var(--accent)';
+      return `<span style="color:${col};font-weight:700;font-family:var(--font-mono);">[${l.ref}]</span>`;
+    }).join(' ➔ ');
+
+    summaryEl.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">Taxi Clearance Path</span>
+        <span style="font-family:var(--font-mono);font-size:10.5px;color:var(--green);font-weight:700;">${fmt(total_distance_ft)} ft / ${fmt(total_distance_m)} m</span>
+      </div>
+      <div style="font-size:10.5px;color:var(--text-secondary);display:flex;justify-content:space-between;">
+        <span>Est. Taxi Time:</span>
+        <span style="font-family:var(--font-mono);color:var(--text-primary);font-weight:700;">~${estMin} min @ 15 kts</span>
+      </div>
+      <div style="margin-top:4px;padding:4px 6px;background:rgba(0,0,0,0.4);border-radius:3px;font-size:11px;">
+        ${breadcrumbs}
+      </div>
+      ${closureNotice}
+    `;
+  }
+}
+
 // ── Controls & Event Listeners ────────────────────────────────────────────────
 
 function initControls() {
@@ -1162,6 +1315,26 @@ document.getElementById('searchBtn').addEventListener('click', () => {
 document.getElementById('airportSearch').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') goToAirport(e.target.value);
 });
+
+
+  const btnRoute = document.getElementById('btnGenerateTaxiRoute');
+  const btnClear = document.getElementById('btnClearTaxiRoute');
+  const inputRoute = document.getElementById('taxiRouteInput');
+
+  if (btnRoute && inputRoute) {
+    btnRoute.addEventListener('click', () => {
+      generateTaxiRoute(inputRoute.value);
+    });
+    inputRoute.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') generateTaxiRoute(inputRoute.value);
+    });
+  }
+
+  if (btnClear) {
+    btnClear.addEventListener('click', () => {
+      clearTaxiRoute();
+    });
+  }
 
 initControls();
 showLoading(false);
