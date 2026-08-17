@@ -75,9 +75,6 @@ let traceDotLayers = [];
 let hasUnsavedChanges = false;
 
 const SHOW_TERMINALS_KEY = 'icao_show_terminals_v1';
-showTerminals = true;
-showGates = true;
-showStands = true;
 let showTerminals = true;
 let showTerminalBuildings = true;
 let showGates = true;
