@@ -94,6 +94,7 @@ if (!fs.existsSync(TERMINALS_CACHE_DIR)) {
     try { fs.mkdirSync(TERMINALS_CACHE_DIR, { recursive: true }); } catch (e) {}
 }
 const TERMINALS_DB_PATH = path.join(__dirname, 'data', 'terminals.json');
+const TAXIWAYS_DB_PATH = path.join(__dirname, 'data', 'taxiways.json');
 
 let seedTerminals = {};
 try {
@@ -1228,6 +1229,59 @@ function mergeGatesAndStands(gates = [], stands = []) {
   return bays;
 }
 
+
+
+// ── POST /api/taxiways/save — Persist Renamed & Calibrated Taxiway Labels ───────
+
+app.post('/api/taxiways/save', (req, res) => {
+  try {
+    const { icao, segments } = req.body;
+    if (!icao) {
+      return res.status(400).json({ error: 'icao is required' });
+    }
+
+    const upperIcao = icao.toUpperCase().trim();
+    const cleanSegments = Array.isArray(segments) ? segments : [];
+
+    const taxiwayData = {
+      icao: upperIcao,
+      segments: cleanSegments
+    };
+
+    // 1. Update in-memory seed DB
+    seedTaxiways[upperIcao] = taxiwayData;
+
+    // 2. Persist to data/taxiways.json on disk
+    let allDb = {};
+    if (fs.existsSync(TAXIWAYS_DB_PATH)) {
+      try {
+        allDb = JSON.parse(fs.readFileSync(TAXIWAYS_DB_PATH, 'utf8'));
+      } catch (e) {
+        allDb = {};
+      }
+    }
+    allDb[upperIcao] = taxiwayData;
+    fs.writeFileSync(TAXIWAYS_DB_PATH, JSON.stringify(allDb, null, 2), 'utf8');
+
+    // 3. Persist to disk cache
+    try {
+      const cacheFile = path.join(TAXIWAY_CACHE_DIR, `${upperIcao}.json`);
+      fs.writeFileSync(cacheFile, JSON.stringify(taxiwayData, null, 2), 'utf8');
+    } catch (e) {}
+
+    console.log(`💾 [TAXIWAY PERSISTENCE] Successfully saved ${cleanSegments.length} taxiway segments for ${upperIcao} to data/taxiways.json`);
+
+    return res.json({
+      success: true,
+      icao: upperIcao,
+      count: cleanSegments.length,
+      segments: cleanSegments
+    });
+  } catch (err) {
+    console.error('Error saving taxiways:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ── POST /api/terminals/save — Persist Calibrated Gates, Stands & Lead-In Paths ─
 

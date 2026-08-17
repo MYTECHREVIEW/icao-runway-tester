@@ -4,629 +4,1531 @@
     "terminals": [],
     "gates": [
       {
-        "id": 3064200521,
+        "id": 61000000,
         "ref": "69",
         "name": "Gate 69",
         "lat": 40.7728821,
-        "lon": -73.8649874
+        "lon": -73.8649874,
+        "lead_in_coords": null
       },
       {
-        "id": 3064200525,
+        "id": 61000001,
         "ref": "61",
         "name": "Gate 61",
         "lat": 40.7718794,
-        "lon": -73.8662214
+        "lon": -73.8662214,
+        "lead_in_coords": null
       },
       {
-        "id": 3064200529,
+        "id": 61000002,
         "ref": "65",
         "name": "Gate 65",
         "lat": 40.7724678,
-        "lon": -73.8655431
+        "lon": -73.8655431,
+        "lead_in_coords": null
       },
       {
-        "id": 3064200530,
+        "id": 61000003,
         "ref": "67",
         "name": "Gate 67",
         "lat": 40.7728393,
-        "lon": -73.8650992
+        "lon": -73.8650992,
+        "lead_in_coords": null
       },
       {
-        "id": 3413255875,
+        "id": 61000004,
         "ref": "1",
         "name": "Gate 1",
         "lat": 40.77362,
-        "lon": -73.8848223
+        "lon": -73.8848223,
+        "lead_in_coords": null
       },
       {
-        "id": 3413255876,
+        "id": 61000005,
         "ref": "2",
         "name": "Gate 2",
         "lat": 40.7736539,
-        "lon": -73.8841799
+        "lon": -73.8841799,
+        "lead_in_coords": null
       },
       {
-        "id": 3413255877,
+        "id": 61000006,
         "ref": "3",
         "name": "Gate 3",
         "lat": 40.7736912,
-        "lon": -73.8838377
+        "lon": -73.8838377,
+        "lead_in_coords": null
       },
       {
-        "id": 3413255878,
+        "id": 61000007,
         "ref": "4",
         "name": "Gate 4",
         "lat": 40.773703,
-        "lon": -73.8837261
+        "lon": -73.8837261,
+        "lead_in_coords": null
       },
       {
-        "id": 3413255879,
+        "id": 61000008,
         "ref": "5",
         "name": "Gate 5",
         "lat": 40.7737616,
-        "lon": -73.8837043
+        "lon": -73.8837043,
+        "lead_in_coords": null
       },
       {
-        "id": 3413255881,
+        "id": 61000009,
         "ref": "6",
         "name": "Gate 6",
         "lat": 40.7738251,
-        "lon": -73.8837149
+        "lon": -73.8837149,
+        "lead_in_coords": null
       },
       {
-        "id": 6106773276,
+        "id": 61000010,
         "ref": "46",
         "name": "Gate 46",
         "lat": 40.7745944,
-        "lon": -73.8688209
+        "lon": -73.8688209,
+        "lead_in_coords": null
       },
       {
-        "id": 6106773277,
+        "id": 61000011,
         "ref": "47",
         "name": "Gate 47",
         "lat": 40.7742415,
-        "lon": -73.8690383
+        "lon": -73.8690383,
+        "lead_in_coords": [
+          [
+            40.77436279975429,
+            -73.86868938803673
+          ],
+          [
+            40.77440748620463,
+            -73.86797189712526
+          ],
+          [
+            40.77440748620463,
+            -73.86797189712526
+          ],
+          [
+            40.77441662661122,
+            -73.86787533760072
+          ],
+          [
+            40.77441662661122,
+            -73.86787533760072
+          ],
+          [
+            40.774405455003,
+            -73.86776670813562
+          ],
+          [
+            40.774405455003,
+            -73.86776670813562
+          ],
+          [
+            40.77437904937607,
+            -73.8676741719246
+          ],
+          [
+            40.77437904937607,
+            -73.8676741719246
+          ],
+          [
+            40.774329284896815,
+            -73.8675843179226
+          ],
+          [
+            40.774329284896815,
+            -73.8675843179226
+          ],
+          [
+            40.77428459839388,
+            -73.86752665042879
+          ],
+          [
+            40.77428459839388,
+            -73.86752665042879
+          ],
+          [
+            40.77423483384389,
+            -73.86746495962144
+          ],
+          [
+            40.77423483384389,
+            -73.86746495962144
+          ]
+        ]
       },
       {
-        "id": 6106773278,
+        "id": 61000012,
         "ref": "48",
         "name": "Gate 48",
         "lat": 40.7735575,
-        "lon": -73.8686845
+        "lon": -73.8686845,
+        "lead_in_coords": null
       },
       {
-        "id": 6106773279,
+        "id": 61000013,
         "ref": "52",
         "name": "Gate 52",
         "lat": 40.7731472,
-        "lon": -73.8680956
+        "lon": -73.8680956,
+        "lead_in_coords": [
+          [
+            40.773222,
+            -73.866718
+          ],
+          [
+            40.77328,
+            -73.86665
+          ],
+          [
+            40.77334,
+            -73.86657
+          ],
+          [
+            40.7734,
+            -73.86648
+          ]
+        ]
       },
       {
-        "id": 6106773280,
+        "id": 61000014,
         "ref": "53",
         "name": "Gate 53",
         "lat": 40.7730204,
-        "lon": -73.8680449
+        "lon": -73.8680449,
+        "lead_in_coords": null
       },
       {
-        "id": 6106773281,
+        "id": 61000015,
         "ref": "54",
         "name": "Gate 54",
         "lat": 40.772915,
-        "lon": -73.8681337
+        "lon": -73.8681337,
+        "lead_in_coords": null
       },
       {
-        "id": 6106773282,
+        "id": 61000016,
         "ref": "55",
         "name": "Gate 55",
         "lat": 40.7728866,
-        "lon": -73.8681575
+        "lon": -73.8681575,
+        "lead_in_coords": null
       },
       {
-        "id": 6106773283,
+        "id": 61000017,
         "ref": "56",
         "name": "Gate 56",
         "lat": 40.77299,
-        "lon": -73.8685325
+        "lon": -73.8685325,
+        "lead_in_coords": null
       },
       {
-        "id": 6106777385,
+        "id": 61000018,
         "ref": "58",
         "name": "Gate 58",
         "lat": 40.7735612,
-        "lon": -73.8693584
+        "lon": -73.8693584,
+        "lead_in_coords": null
       },
       {
-        "id": 6106777386,
+        "id": 61000019,
         "ref": "59",
         "name": "Gate 59",
         "lat": 40.773718,
-        "lon": -73.8695797
+        "lon": -73.8695797,
+        "lead_in_coords": null
       },
       {
-        "id": 6117039104,
+        "id": 61000020,
         "ref": "51",
         "name": "Gate 51",
         "lat": 40.7731742,
-        "lon": -73.868132
+        "lon": -73.868132,
+        "lead_in_coords": null
       },
       {
-        "id": 6117039107,
+        "id": 61000021,
         "ref": "45",
         "name": "Gate 45",
         "lat": 40.7746078,
-        "lon": -73.8688485
+        "lon": -73.8688485,
+        "lead_in_coords": null
       },
       {
-        "id": 6117039110,
+        "id": 61000022,
         "ref": "44",
         "name": "Gate 44",
         "lat": 40.7747074,
-        "lon": -73.8690562
+        "lon": -73.8690562,
+        "lead_in_coords": null
       },
       {
-        "id": 6139084160,
+        "id": 61000023,
         "ref": "42",
         "name": "Gate 42",
         "lat": 40.7744241,
-        "lon": -73.8693983
+        "lon": -73.8693983,
+        "lead_in_coords": null
       },
       {
-        "id": 6139084161,
+        "id": 61000024,
         "ref": "43",
         "name": "Gate 43",
         "lat": 40.7746625,
-        "lon": -73.8691981
+        "lon": -73.8691981,
+        "lead_in_coords": null
       },
       {
-        "id": 6139158649,
+        "id": 61000025,
         "ref": "40",
         "name": "Gate 40",
         "lat": 40.773985,
-        "lon": -73.8697735
+        "lon": -73.8697735,
+        "lead_in_coords": null
       },
       {
-        "id": 6360888976,
+        "id": 61000026,
         "ref": "57",
         "name": "Gate 57",
         "lat": 40.7731524,
-        "lon": -73.8687658
+        "lon": -73.8687658,
+        "lead_in_coords": null
       },
       {
-        "id": 6570473316,
+        "id": 61000027,
         "ref": "92",
         "name": "Gate 92",
         "lat": 40.76782,
-        "lon": -73.8594988
+        "lon": -73.8594988,
+        "lead_in_coords": null
       },
       {
-        "id": 6570473317,
+        "id": 61000028,
         "ref": "93",
         "name": "Gate 93",
         "lat": 40.7680592,
-        "lon": -73.8592099
+        "lon": -73.8592099,
+        "lead_in_coords": null
       },
       {
-        "id": 6570473318,
+        "id": 61000029,
         "ref": "94",
         "name": "Gate 94",
         "lat": 40.7683744,
-        "lon": -73.858832
+        "lon": -73.858832,
+        "lead_in_coords": null
       },
       {
-        "id": 6570473319,
+        "id": 61000030,
         "ref": "95",
         "name": "Gate 95",
         "lat": 40.7685523,
-        "lon": -73.8586182
+        "lon": -73.8586182,
+        "lead_in_coords": null
       },
       {
-        "id": 6570473322,
+        "id": 61000031,
         "ref": "98",
         "name": "Gate 98",
         "lat": 40.7691946,
-        "lon": -73.8578475
+        "lon": -73.8578475,
+        "lead_in_coords": null
       },
       {
-        "id": 6586854043,
+        "id": 61000032,
         "ref": "30",
         "name": "Gate 30",
         "lat": 40.7752409,
-        "lon": -73.8719421
+        "lon": -73.8719421,
+        "lead_in_coords": null
       },
       {
-        "id": 6754139078,
+        "id": 61000033,
         "ref": "24",
         "name": "Gate 24",
         "lat": 40.7757513,
-        "lon": -73.8720448
+        "lon": -73.8720448,
+        "lead_in_coords": null
       },
       {
-        "id": 6754139081,
+        "id": 61000034,
         "ref": "26",
         "name": "Gate 26",
         "lat": 40.7758559,
-        "lon": -73.871544
+        "lon": -73.871544,
+        "lead_in_coords": null
       },
       {
-        "id": 6754139082,
+        "id": 61000035,
         "ref": "27",
         "name": "Gate 27",
         "lat": 40.77584,
-        "lon": -73.871511
+        "lon": -73.871511,
+        "lead_in_coords": null
       },
       {
-        "id": 6757572302,
+        "id": 61000036,
         "ref": "28",
         "name": "Gate 28",
         "lat": 40.7756077,
-        "lon": -73.8716332
+        "lon": -73.8716332,
+        "lead_in_coords": null
       },
       {
-        "id": 6757572303,
+        "id": 61000037,
         "ref": "29",
         "name": "Gate 29",
         "lat": 40.7755082,
-        "lon": -73.8717166
+        "lon": -73.8717166,
+        "lead_in_coords": null
       },
       {
-        "id": 7801543749,
+        "id": 61000038,
         "ref": "41",
         "name": "Gate 41",
         "lat": 40.7740426,
-        "lon": -73.8697176
+        "lon": -73.8697176,
+        "lead_in_coords": null
       },
       {
-        "id": 8252427065,
+        "id": 61000039,
         "ref": "62",
         "name": "Gate 62",
         "lat": 40.7719324,
-        "lon": -73.8655341
+        "lon": -73.8655341,
+        "lead_in_coords": null
       },
       {
-        "id": 8252427072,
+        "id": 61000040,
         "ref": "64",
         "name": "Gate 64",
         "lat": 40.7721545,
-        "lon": -73.8653059
+        "lon": -73.8653059,
+        "lead_in_coords": null
       },
       {
-        "id": 8252427085,
+        "id": 61000041,
         "ref": "68",
         "name": "Gate 68",
         "lat": 40.7726287,
-        "lon": -73.8647906
+        "lon": -73.8647906,
+        "lead_in_coords": null
       },
       {
-        "id": 9311213965,
+        "id": 61000042,
         "ref": "96",
         "name": "Gate 96",
         "lat": 40.7687443,
-        "lon": -73.8584636
+        "lon": -73.8584636,
+        "lead_in_coords": null
       },
       {
-        "id": 9311213970,
+        "id": 61000043,
         "ref": "97",
         "name": "Gate 97",
         "lat": 40.7689441,
-        "lon": -73.8581459
+        "lon": -73.8581459,
+        "lead_in_coords": null
       },
       {
-        "id": 9834318928,
+        "id": 61000044,
         "ref": "14",
         "name": "Gate 14",
         "lat": 40.7753772,
-        "lon": -73.873394
+        "lon": -73.873394,
+        "lead_in_coords": null
       },
       {
-        "id": 9834318929,
+        "id": 61000045,
         "ref": "18",
         "name": "Gate 18",
         "lat": 40.7757448,
-        "lon": -73.873784
+        "lon": -73.873784,
+        "lead_in_coords": null
       },
       {
-        "id": 9834318930,
+        "id": 61000046,
         "ref": "17",
         "name": "Gate 17",
         "lat": 40.7755817,
-        "lon": -73.8739228
+        "lon": -73.8739228,
+        "lead_in_coords": null
       },
       {
-        "id": 9834318936,
+        "id": 61000047,
         "ref": "16",
         "name": "Gate 16",
         "lat": 40.7755552,
-        "lon": -73.8739453
+        "lon": -73.8739453,
+        "lead_in_coords": null
       },
       {
-        "id": 9834318939,
+        "id": 61000048,
         "ref": "22",
         "name": "Gate 22",
         "lat": 40.775666,
-        "lon": -73.8729829
+        "lon": -73.8729829,
+        "lead_in_coords": null
       },
       {
-        "id": 9834318943,
+        "id": 61000049,
         "ref": "15",
         "name": "Gate 15",
         "lat": 40.7754809,
-        "lon": -73.8739334
+        "lon": -73.8739334,
+        "lead_in_coords": null
       },
       {
-        "id": 9834318944,
+        "id": 61000050,
         "ref": "12",
         "name": "Gate 12",
         "lat": 40.7752556,
-        "lon": -73.8727609
+        "lon": -73.8727609,
+        "lead_in_coords": null
       },
       {
-        "id": 9834318945,
+        "id": 61000051,
         "ref": "19",
         "name": "Gate 19",
         "lat": 40.7757946,
-        "lon": -73.8735977
+        "lon": -73.8735977,
+        "lead_in_coords": null
       },
       {
-        "id": 9834318947,
+        "id": 61000052,
         "ref": "20",
         "name": "Gate 20",
         "lat": 40.7757868,
-        "lon": -73.8735678
+        "lon": -73.8735678,
+        "lead_in_coords": null
       },
       {
-        "id": 9834318949,
+        "id": 61000053,
         "ref": "11",
         "name": "Gate 11",
         "lat": 40.7752024,
-        "lon": -73.8724843
+        "lon": -73.8724843,
+        "lead_in_coords": null
       },
       {
-        "id": 10561869300,
+        "id": 61000054,
         "ref": "50",
         "name": "Gate 50",
         "lat": 40.7732601,
-        "lon": -73.8682564
+        "lon": -73.8682564,
+        "lead_in_coords": null
       },
       {
-        "id": 10565123438,
+        "id": 61000055,
         "ref": "89B",
         "name": "Gate 89B",
         "lat": 40.7698631,
-        "lon": -73.8603671
+        "lon": -73.8603671,
+        "lead_in_coords": null
       },
       {
-        "id": 10565123440,
+        "id": 61000056,
         "ref": "88B",
         "name": "Gate 88B",
         "lat": 40.7697144,
-        "lon": -73.8604355
+        "lon": -73.8604355,
+        "lead_in_coords": null
       },
       {
-        "id": 10565123448,
+        "id": 61000057,
         "ref": "88A",
         "name": "Gate 88A",
         "lat": 40.7694721,
-        "lon": -73.8607244
+        "lon": -73.8607244,
+        "lead_in_coords": null
       },
       {
-        "id": 10565123451,
+        "id": 61000058,
         "ref": "86",
         "name": "Gate 86",
         "lat": 40.7691974,
-        "lon": -73.8610605
+        "lon": -73.8610605,
+        "lead_in_coords": null
       },
       {
-        "id": 10565123482,
+        "id": 61000059,
         "ref": "72",
         "name": "Gate 72",
         "lat": 40.7705736,
-        "lon": -73.8636027
+        "lon": -73.8636027,
+        "lead_in_coords": null
       },
       {
-        "id": 10565123485,
+        "id": 61000060,
         "ref": "76",
         "name": "Gate 76",
         "lat": 40.7712009,
-        "lon": -73.8628495
+        "lon": -73.8628495,
+        "lead_in_coords": null
       },
       {
-        "id": 10565123488,
+        "id": 61000061,
         "ref": "78",
         "name": "Gate 78",
         "lat": 40.7714578,
-        "lon": -73.8625876
+        "lon": -73.8625876,
+        "lead_in_coords": null
       },
       {
-        "id": 10565123492,
+        "id": 61000062,
         "ref": "79",
         "name": "Gate 79",
         "lat": 40.7715563,
-        "lon": -73.8627336
+        "lon": -73.8627336,
+        "lead_in_coords": null
       },
       {
-        "id": 10565123496,
+        "id": 61000063,
         "ref": "77",
         "name": "Gate 77",
         "lat": 40.7716035,
-        "lon": -73.8628037
+        "lon": -73.8628037,
+        "lead_in_coords": null
       },
       {
-        "id": 10565123501,
+        "id": 61000064,
         "ref": "75",
         "name": "Gate 75",
         "lat": 40.7713912,
-        "lon": -73.8631063
+        "lon": -73.8631063,
+        "lead_in_coords": null
       },
       {
-        "id": 10565123505,
+        "id": 61000065,
         "ref": "73",
         "name": "Gate 73",
         "lat": 40.7710742,
-        "lon": -73.8634878
+        "lon": -73.8634878,
+        "lead_in_coords": null
       },
       {
-        "id": 10565140412,
+        "id": 61000066,
         "ref": "74",
         "name": "Gate 74",
         "lat": 40.7708536,
-        "lon": -73.8632605
+        "lon": -73.8632605,
+        "lead_in_coords": null
       },
       {
-        "id": 11579277806,
+        "id": 61000067,
         "ref": "71",
         "name": "Gate 71",
         "lat": 40.7707483,
-        "lon": -73.8638732
+        "lon": -73.8638732,
+        "lead_in_coords": null
       },
       {
-        "id": 11721657509,
+        "id": 61000068,
         "ref": "66",
         "name": "Gate 66",
         "lat": 40.7724611,
-        "lon": -73.8650161
+        "lon": -73.8650161,
+        "lead_in_coords": null
       },
       {
-        "id": 12463874431,
+        "id": 61000069,
         "ref": "89A",
         "name": "Gate 89A",
         "lat": 40.7699375,
-        "lon": -73.8604803
+        "lon": -73.8604803,
+        "lead_in_coords": null
       },
       {
-        "id": 13070176556,
+        "id": 61000070,
         "ref": "85",
         "name": "Gate 85",
         "lat": 40.769548,
-        "lon": -73.8611343
+        "lon": -73.8611343,
+        "lead_in_coords": null
       },
       {
-        "id": 13070176557,
+        "id": 61000071,
         "ref": "87",
         "name": "Gate 87",
         "lat": 40.769847,
-        "lon": -73.8607748
+        "lon": -73.8607748,
+        "lead_in_coords": null
       },
       {
-        "id": 13070176558,
+        "id": 61000072,
         "ref": "83",
         "name": "Gate 83",
         "lat": 40.7691693,
-        "lon": -73.8615809
+        "lon": -73.8615809,
+        "lead_in_coords": null
       },
       {
-        "id": 13070176559,
+        "id": 61000073,
         "ref": "81",
         "name": "Gate 81",
         "lat": 40.7688098,
-        "lon": -73.862013
+        "lon": -73.862013,
+        "lead_in_coords": null
       },
       {
-        "id": 13070176560,
+        "id": 61000074,
         "ref": "80",
         "name": "Gate 80",
         "lat": 40.7682389,
-        "lon": -73.8620462
+        "lon": -73.8620462,
+        "lead_in_coords": null
       },
       {
-        "id": 13070176561,
+        "id": 61000075,
         "ref": "82",
         "name": "Gate 82",
         "lat": 40.7686098,
-        "lon": -73.8617714
+        "lon": -73.8617714,
+        "lead_in_coords": null
       },
       {
-        "id": 13070176562,
+        "id": 61000076,
         "ref": "84",
         "name": "Gate 84",
         "lat": 40.7689471,
-        "lon": -73.8613635
+        "lon": -73.8613635,
+        "lead_in_coords": null
       },
       {
-        "id": 13436809295,
+        "id": 61000077,
         "ref": "70",
         "name": "Gate 70",
         "lat": 40.7701714,
-        "lon": -73.8639374
+        "lon": -73.8639374,
+        "lead_in_coords": null
       },
       {
-        "id": 13524762588,
+        "id": 61000078,
         "ref": "63",
         "name": "Gate 63",
         "lat": 40.7722149,
-        "lon": -73.8657888
+        "lon": -73.8657888,
+        "lead_in_coords": null
       },
       {
-        "id": 13583718435,
+        "id": 61000079,
         "ref": "31",
         "name": "Gate 31",
         "lat": 40.7752178,
-        "lon": -73.8719616
+        "lon": -73.8719616,
+        "lead_in_coords": null
       }
     ],
     "stands": [
       {
-        "id": 9311213984,
-        "ref": "93",
-        "name": "Stand 93",
-        "lat": 40.7679607,
-        "lon": -73.859625
+        "id": 10000000,
+        "ref": "69",
+        "name": "Stand 69",
+        "max_wingspan_m": null,
+        "lat": 40.7728821,
+        "lon": -73.8649874,
+        "lead_in_coords": null
       },
       {
-        "id": 9311213993,
-        "ref": "92",
-        "name": "Stand 92",
-        "lat": 40.7676948,
-        "lon": -73.8598876
+        "id": 10000001,
+        "ref": "61",
+        "name": "Stand 61",
+        "max_wingspan_m": null,
+        "lat": 40.7718794,
+        "lon": -73.8662214,
+        "lead_in_coords": null
       },
       {
-        "id": 9311571496,
-        "ref": "6",
-        "name": "Stand 6",
-        "lat": 40.7739771,
-        "lon": -73.8836467
+        "id": 10000002,
+        "ref": "65",
+        "name": "Stand 65",
+        "max_wingspan_m": null,
+        "lat": 40.7724678,
+        "lon": -73.8655431,
+        "lead_in_coords": null
       },
       {
-        "id": 9311571498,
-        "ref": "5",
-        "name": "Stand 5",
-        "lat": 40.7737923,
-        "lon": -73.8834467
+        "id": 10000003,
+        "ref": "67",
+        "name": "Stand 67",
+        "max_wingspan_m": null,
+        "lat": 40.7728393,
+        "lon": -73.8650992,
+        "lead_in_coords": null
       },
       {
-        "id": 9311571500,
-        "ref": "4",
-        "name": "Stand 4",
-        "lat": 40.7735428,
-        "lon": -73.8834955
-      },
-      {
-        "id": 9311571504,
-        "ref": "3",
-        "name": "Stand 3",
-        "lat": 40.7734336,
-        "lon": -73.8837757
-      },
-      {
-        "id": 9311571518,
-        "ref": "2",
-        "name": "Stand 2",
-        "lat": 40.7734544,
-        "lon": -73.884169
-      },
-      {
-        "id": 9311571534,
+        "id": 10000004,
         "ref": "1",
         "name": "Stand 1",
+        "max_wingspan_m": null,
         "lat": 40.7734392,
-        "lon": -73.8847714
+        "lon": -73.8847714,
+        "lead_in_coords": null
       },
       {
-        "id": 9311571540,
+        "id": 10000005,
+        "ref": "2",
+        "name": "Stand 2",
+        "max_wingspan_m": null,
+        "lat": 40.7734544,
+        "lon": -73.884169,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000006,
+        "ref": "3",
+        "name": "Stand 3",
+        "max_wingspan_m": null,
+        "lat": 40.7734336,
+        "lon": -73.8837757,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000007,
+        "ref": "4",
+        "name": "Stand 4",
+        "max_wingspan_m": null,
+        "lat": 40.7735428,
+        "lon": -73.8834955,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000008,
+        "ref": "5",
+        "name": "Stand 5",
+        "max_wingspan_m": null,
+        "lat": 40.7737923,
+        "lon": -73.8834467,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000009,
+        "ref": "6",
+        "name": "Stand 6",
+        "max_wingspan_m": null,
+        "lat": 40.7739771,
+        "lon": -73.8836467,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000010,
+        "ref": "46",
+        "name": "Stand 46",
+        "max_wingspan_m": null,
+        "lat": 40.7745944,
+        "lon": -73.8688209,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000011,
+        "ref": "47",
+        "name": "Stand 47",
+        "max_wingspan_m": null,
+        "lat": 40.77436279975429,
+        "lon": -73.86868938803673,
+        "lead_in_coords": [
+          [
+            40.77436279975429,
+            -73.86868938803673
+          ],
+          [
+            40.77440748620463,
+            -73.86797189712526
+          ],
+          [
+            40.77440748620463,
+            -73.86797189712526
+          ],
+          [
+            40.77441662661122,
+            -73.86787533760072
+          ],
+          [
+            40.77441662661122,
+            -73.86787533760072
+          ],
+          [
+            40.774405455003,
+            -73.86776670813562
+          ],
+          [
+            40.774405455003,
+            -73.86776670813562
+          ],
+          [
+            40.77437904937607,
+            -73.8676741719246
+          ],
+          [
+            40.77437904937607,
+            -73.8676741719246
+          ],
+          [
+            40.774329284896815,
+            -73.8675843179226
+          ],
+          [
+            40.774329284896815,
+            -73.8675843179226
+          ],
+          [
+            40.77428459839388,
+            -73.86752665042879
+          ],
+          [
+            40.77428459839388,
+            -73.86752665042879
+          ],
+          [
+            40.77423483384389,
+            -73.86746495962144
+          ],
+          [
+            40.77423483384389,
+            -73.86746495962144
+          ]
+        ]
+      },
+      {
+        "id": 10000012,
+        "ref": "48",
+        "name": "Stand 48",
+        "max_wingspan_m": null,
+        "lat": 40.7735575,
+        "lon": -73.8686845,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000013,
+        "ref": "52",
+        "name": "Stand 52",
+        "max_wingspan_m": null,
+        "lat": 40.773222,
+        "lon": -73.866718,
+        "lead_in_coords": [
+          [
+            40.773222,
+            -73.866718
+          ],
+          [
+            40.77328,
+            -73.86665
+          ],
+          [
+            40.77334,
+            -73.86657
+          ],
+          [
+            40.7734,
+            -73.86648
+          ]
+        ]
+      },
+      {
+        "id": 10000014,
+        "ref": "53",
+        "name": "Stand 53",
+        "max_wingspan_m": null,
+        "lat": 40.7730204,
+        "lon": -73.8680449,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000015,
+        "ref": "54",
+        "name": "Stand 54",
+        "max_wingspan_m": null,
+        "lat": 40.772915,
+        "lon": -73.8681337,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000016,
+        "ref": "55",
+        "name": "Stand 55",
+        "max_wingspan_m": null,
+        "lat": 40.7728866,
+        "lon": -73.8681575,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000017,
+        "ref": "56",
+        "name": "Stand 56",
+        "max_wingspan_m": null,
+        "lat": 40.77299,
+        "lon": -73.8685325,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000018,
+        "ref": "58",
+        "name": "Stand 58",
+        "max_wingspan_m": null,
+        "lat": 40.7735612,
+        "lon": -73.8693584,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000019,
+        "ref": "59",
+        "name": "Stand 59",
+        "max_wingspan_m": null,
+        "lat": 40.773718,
+        "lon": -73.8695797,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000020,
+        "ref": "51",
+        "name": "Stand 51",
+        "max_wingspan_m": null,
+        "lat": 40.7731742,
+        "lon": -73.868132,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000021,
+        "ref": "45",
+        "name": "Stand 45",
+        "max_wingspan_m": null,
+        "lat": 40.7746078,
+        "lon": -73.8688485,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000022,
+        "ref": "44",
+        "name": "Stand 44",
+        "max_wingspan_m": null,
+        "lat": 40.7747074,
+        "lon": -73.8690562,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000023,
+        "ref": "42",
+        "name": "Stand 42",
+        "max_wingspan_m": null,
+        "lat": 40.7744241,
+        "lon": -73.8693983,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000024,
+        "ref": "43",
+        "name": "Stand 43",
+        "max_wingspan_m": null,
+        "lat": 40.7746625,
+        "lon": -73.8691981,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000025,
+        "ref": "40",
+        "name": "Stand 40",
+        "max_wingspan_m": null,
+        "lat": 40.773985,
+        "lon": -73.8697735,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000026,
+        "ref": "57",
+        "name": "Stand 57",
+        "max_wingspan_m": null,
+        "lat": 40.7731524,
+        "lon": -73.8687658,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000027,
+        "ref": "92",
+        "name": "Stand 92",
+        "max_wingspan_m": null,
+        "lat": 40.7676948,
+        "lon": -73.8598876,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000028,
+        "ref": "93",
+        "name": "Stand 93",
+        "max_wingspan_m": null,
+        "lat": 40.7679607,
+        "lon": -73.859625,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000029,
+        "ref": "94",
+        "name": "Stand 94",
+        "max_wingspan_m": null,
+        "lat": 40.7683744,
+        "lon": -73.858832,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000030,
+        "ref": "95",
+        "name": "Stand 95",
+        "max_wingspan_m": null,
+        "lat": 40.7685523,
+        "lon": -73.8586182,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000031,
+        "ref": "98",
+        "name": "Stand 98",
+        "max_wingspan_m": null,
+        "lat": 40.7691946,
+        "lon": -73.8578475,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000032,
+        "ref": "30",
+        "name": "Stand 30",
+        "max_wingspan_m": null,
+        "lat": 40.7752409,
+        "lon": -73.8719421,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000033,
+        "ref": "24",
+        "name": "Stand 24",
+        "max_wingspan_m": null,
+        "lat": 40.7757513,
+        "lon": -73.8720448,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000034,
+        "ref": "26",
+        "name": "Stand 26",
+        "max_wingspan_m": null,
+        "lat": 40.7758559,
+        "lon": -73.871544,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000035,
+        "ref": "27",
+        "name": "Stand 27",
+        "max_wingspan_m": null,
+        "lat": 40.77584,
+        "lon": -73.871511,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000036,
+        "ref": "28",
+        "name": "Stand 28",
+        "max_wingspan_m": null,
+        "lat": 40.7756077,
+        "lon": -73.8716332,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000037,
+        "ref": "29",
+        "name": "Stand 29",
+        "max_wingspan_m": null,
+        "lat": 40.7755082,
+        "lon": -73.8717166,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000038,
+        "ref": "41",
+        "name": "Stand 41",
+        "max_wingspan_m": null,
+        "lat": 40.7740426,
+        "lon": -73.8697176,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000039,
+        "ref": "62",
+        "name": "Stand 62",
+        "max_wingspan_m": null,
+        "lat": 40.7719324,
+        "lon": -73.8655341,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000040,
+        "ref": "64",
+        "name": "Stand 64",
+        "max_wingspan_m": null,
+        "lat": 40.7721545,
+        "lon": -73.8653059,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000041,
+        "ref": "68",
+        "name": "Stand 68",
+        "max_wingspan_m": null,
+        "lat": 40.7726287,
+        "lon": -73.8647906,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000042,
+        "ref": "96",
+        "name": "Stand 96",
+        "max_wingspan_m": null,
+        "lat": 40.7687443,
+        "lon": -73.8584636,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000043,
+        "ref": "97",
+        "name": "Stand 97",
+        "max_wingspan_m": null,
+        "lat": 40.7689441,
+        "lon": -73.8581459,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000044,
+        "ref": "14",
+        "name": "Stand 14",
+        "max_wingspan_m": null,
+        "lat": 40.7753772,
+        "lon": -73.873394,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000045,
+        "ref": "18",
+        "name": "Stand 18",
+        "max_wingspan_m": null,
+        "lat": 40.7757448,
+        "lon": -73.873784,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000046,
+        "ref": "17",
+        "name": "Stand 17",
+        "max_wingspan_m": null,
+        "lat": 40.7755817,
+        "lon": -73.8739228,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000047,
+        "ref": "16",
+        "name": "Stand 16",
+        "max_wingspan_m": null,
+        "lat": 40.7755552,
+        "lon": -73.8739453,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000048,
+        "ref": "22",
+        "name": "Stand 22",
+        "max_wingspan_m": null,
+        "lat": 40.775666,
+        "lon": -73.8729829,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000049,
+        "ref": "15",
+        "name": "Stand 15",
+        "max_wingspan_m": null,
+        "lat": 40.7754809,
+        "lon": -73.8739334,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000050,
+        "ref": "12",
+        "name": "Stand 12",
+        "max_wingspan_m": null,
+        "lat": 40.7752556,
+        "lon": -73.8727609,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000051,
+        "ref": "19",
+        "name": "Stand 19",
+        "max_wingspan_m": null,
+        "lat": 40.7757946,
+        "lon": -73.8735977,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000052,
+        "ref": "20",
+        "name": "Stand 20",
+        "max_wingspan_m": null,
+        "lat": 40.7757868,
+        "lon": -73.8735678,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000053,
+        "ref": "11",
+        "name": "Stand 11",
+        "max_wingspan_m": null,
+        "lat": 40.7752024,
+        "lon": -73.8724843,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000054,
+        "ref": "50",
+        "name": "Stand 50",
+        "max_wingspan_m": null,
+        "lat": 40.7732601,
+        "lon": -73.8682564,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000055,
+        "ref": "89B",
+        "name": "Stand 89B",
+        "max_wingspan_m": null,
+        "lat": 40.7698631,
+        "lon": -73.8603671,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000056,
+        "ref": "88B",
+        "name": "Stand 88B",
+        "max_wingspan_m": null,
+        "lat": 40.7697144,
+        "lon": -73.8604355,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000057,
+        "ref": "88A",
+        "name": "Stand 88A",
+        "max_wingspan_m": null,
+        "lat": 40.7694721,
+        "lon": -73.8607244,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000058,
+        "ref": "86",
+        "name": "Stand 86",
+        "max_wingspan_m": null,
+        "lat": 40.7691974,
+        "lon": -73.8610605,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000059,
+        "ref": "72",
+        "name": "Stand 72",
+        "max_wingspan_m": null,
+        "lat": 40.7705736,
+        "lon": -73.8636027,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000060,
+        "ref": "76",
+        "name": "Stand 76",
+        "max_wingspan_m": null,
+        "lat": 40.7712009,
+        "lon": -73.8628495,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000061,
+        "ref": "78",
+        "name": "Stand 78",
+        "max_wingspan_m": null,
+        "lat": 40.7714578,
+        "lon": -73.8625876,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000062,
+        "ref": "79",
+        "name": "Stand 79",
+        "max_wingspan_m": null,
+        "lat": 40.7715563,
+        "lon": -73.8627336,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000063,
+        "ref": "77",
+        "name": "Stand 77",
+        "max_wingspan_m": null,
+        "lat": 40.7716035,
+        "lon": -73.8628037,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000064,
+        "ref": "75",
+        "name": "Stand 75",
+        "max_wingspan_m": null,
+        "lat": 40.7713912,
+        "lon": -73.8631063,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000065,
+        "ref": "73",
+        "name": "Stand 73",
+        "max_wingspan_m": null,
+        "lat": 40.7710742,
+        "lon": -73.8634878,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000066,
+        "ref": "74",
+        "name": "Stand 74",
+        "max_wingspan_m": null,
+        "lat": 40.7708536,
+        "lon": -73.8632605,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000067,
+        "ref": "71",
+        "name": "Stand 71",
+        "max_wingspan_m": null,
+        "lat": 40.7707483,
+        "lon": -73.8638732,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000068,
+        "ref": "66",
+        "name": "Stand 66",
+        "max_wingspan_m": null,
+        "lat": 40.7724611,
+        "lon": -73.8650161,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000069,
+        "ref": "89A",
+        "name": "Stand 89A",
+        "max_wingspan_m": null,
+        "lat": 40.7699375,
+        "lon": -73.8604803,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000070,
+        "ref": "85",
+        "name": "Stand 85",
+        "max_wingspan_m": null,
+        "lat": 40.769548,
+        "lon": -73.8611343,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000071,
+        "ref": "87",
+        "name": "Stand 87",
+        "max_wingspan_m": null,
+        "lat": 40.769847,
+        "lon": -73.8607748,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000072,
+        "ref": "83",
+        "name": "Stand 83",
+        "max_wingspan_m": null,
+        "lat": 40.7691693,
+        "lon": -73.8615809,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000073,
+        "ref": "81",
+        "name": "Stand 81",
+        "max_wingspan_m": null,
+        "lat": 40.7688098,
+        "lon": -73.862013,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000074,
+        "ref": "80",
+        "name": "Stand 80",
+        "max_wingspan_m": null,
+        "lat": 40.7682389,
+        "lon": -73.8620462,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000075,
+        "ref": "82",
+        "name": "Stand 82",
+        "max_wingspan_m": null,
+        "lat": 40.7686098,
+        "lon": -73.8617714,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000076,
+        "ref": "84",
+        "name": "Stand 84",
+        "max_wingspan_m": null,
+        "lat": 40.7689471,
+        "lon": -73.8613635,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000077,
+        "ref": "70",
+        "name": "Stand 70",
+        "max_wingspan_m": null,
+        "lat": 40.7701714,
+        "lon": -73.8639374,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000078,
+        "ref": "63",
+        "name": "Stand 63",
+        "max_wingspan_m": null,
+        "lat": 40.7722149,
+        "lon": -73.8657888,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000079,
+        "ref": "31",
+        "name": "Stand 31",
+        "max_wingspan_m": null,
+        "lat": 40.7752178,
+        "lon": -73.8719616,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000080,
         "ref": "1A",
         "name": "Stand 1A",
+        "max_wingspan_m": null,
         "lat": 40.7734311,
-        "lon": -73.8847606
+        "lon": -73.8847606,
+        "lead_in_coords": null
       }
     ],
     "bays": [
@@ -779,12 +1681,74 @@
         "name": "Gate 47",
         "type": "gate",
         "has_jetbridge": true,
-        "lat": 40.7742415,
-        "lon": -73.8690383,
+        "lat": 40.77436279975429,
+        "lon": -73.86868938803673,
         "jetbridge_lat": 40.7742415,
         "jetbridge_lon": -73.8690383,
         "heading": 0,
-        "max_wingspan_m": null
+        "max_wingspan_m": null,
+        "lead_in_coords": [
+          [
+            40.77436279975429,
+            -73.86868938803673
+          ],
+          [
+            40.77440748620463,
+            -73.86797189712526
+          ],
+          [
+            40.77440748620463,
+            -73.86797189712526
+          ],
+          [
+            40.77441662661122,
+            -73.86787533760072
+          ],
+          [
+            40.77441662661122,
+            -73.86787533760072
+          ],
+          [
+            40.774405455003,
+            -73.86776670813562
+          ],
+          [
+            40.774405455003,
+            -73.86776670813562
+          ],
+          [
+            40.77437904937607,
+            -73.8676741719246
+          ],
+          [
+            40.77437904937607,
+            -73.8676741719246
+          ],
+          [
+            40.774329284896815,
+            -73.8675843179226
+          ],
+          [
+            40.774329284896815,
+            -73.8675843179226
+          ],
+          [
+            40.77428459839388,
+            -73.86752665042879
+          ],
+          [
+            40.77428459839388,
+            -73.86752665042879
+          ],
+          [
+            40.77423483384389,
+            -73.86746495962144
+          ],
+          [
+            40.77423483384389,
+            -73.86746495962144
+          ]
+        ]
       },
       {
         "id": "bay_48",

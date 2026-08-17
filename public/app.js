@@ -1243,8 +1243,9 @@ async function drawAirportTerminals(data) {
   if (gateCountEl) gateCountEl.textContent = gateBays.length;
   if (standCountEl) standCountEl.textContent = standBays.length;
 
-  // Populate editor dropdown
+  // Populate editor dropdowns
   populateEditorBayDropdown(bays);
+  populateEditorTaxiwayDropdown(data.taxiways?.segments);
 
   if (!showTerminals && !isEditMode) return;
 
@@ -1276,7 +1277,7 @@ async function drawAirportTerminals(data) {
       targetLayer.addLayer(customLine);
 
       // Render Draggable Interactive Waypoint Handles in Edit Mode
-      if (isEditMode && isSelected && !isTracingLeadIn) {
+      if (isEditMode && isSelected && !isTracingLeadIn && !isSnappingToTaxiway) {
         bay.lead_in_coords.forEach((pt, pIdx) => {
           const isStart = (pIdx === 0);
           const isEnd = (pIdx === bay.lead_in_coords.length - 1);
@@ -1285,7 +1286,7 @@ async function drawAirportTerminals(data) {
             draggable: true,
             icon: L.divIcon({
               className: 'lead-in-handle-wrapper',
-              html: `<div class="lead-in-handle ${isStart ? 'handle-start' : (isEnd ? 'handle-end' : 'handle-mid')}" title="${isStart ? 'Parking Stop' : (isEnd ? 'Taxilane Junction' : 'Waypoint ' + pIdx)}"></div>`,
+              html: `<div class="lead-in-handle ${isStart ? 'handle-start' : (isEnd ? 'handle-end' : 'handle-mid')}" title="${isStart ? 'Parking Stop' : (isEnd ? 'Taxilane Connection' : 'Waypoint ' + pIdx)}"></div>`,
               iconSize: [14, 14],
               iconAnchor: [7, 7]
             })
@@ -1311,7 +1312,7 @@ async function drawAirportTerminals(data) {
               bay.lon = newCoord[1];
             }
             hasUnsavedChanges = true;
-            showEditorToast(`📍 Adjusted ${isStart ? 'Start' : (isEnd ? 'Taxilane End' : 'Waypoint ' + pIdx)} of ${bay.ref}`);
+            showEditorToast(`📍 Adjusted ${isStart ? 'Start' : (isEnd ? 'Taxiway Connection' : 'Waypoint ' + pIdx)} of ${bay.ref}`);
             saveEditorChanges(true);
             drawAirportTerminals(lastResult);
           });
@@ -1336,7 +1337,7 @@ async function drawAirportTerminals(data) {
     const badgeHtml = `<div class="bay-badge ${isGate ? 'gate' : 'stand'} ${isEditMode ? 'editing' : ''} ${isSelected ? 'selected' : ''}" onclick="window.selectBayFromBadge('${bay.ref}', event)" id="bay-marker-${bay.ref}">${bay.ref}</div>`;
 
     const badgeMarker = L.marker([bay.lat, bay.lon], {
-      draggable: isEditMode && !isTracingLeadIn,
+      draggable: isEditMode && !isTracingLeadIn && !isSnappingToTaxiway,
       icon: L.divIcon({
         className: 'bay-icon-wrapper',
         html: badgeHtml,
@@ -1375,7 +1376,35 @@ window.selectBayFromBadge = function(ref, e) {
   selectBayForEditing(ref);
 };
 
-// ── Visual Editor Functions ──────────────────────────────────────────────────
+// ── Visual Editor State & Tab Switcher ────────────────────────────────────────
+
+let currentEditorTab = 'gates';
+let isSnappingToTaxiway = false;
+let snapClickListener = null;
+
+function switchEditorTab(tabName) {
+  currentEditorTab = tabName;
+  const tabGates = document.getElementById('tabEditGates');
+  const tabTaxiways = document.getElementById('tabEditTaxiways');
+  const rowGates = document.getElementById('editorGatesRow');
+  const rowTaxiways = document.getElementById('editorTaxiwaysRow');
+
+  if (tabName === 'gates') {
+    if (tabGates) tabGates.classList.add('active');
+    if (tabTaxiways) tabTaxiways.classList.remove('active');
+    if (rowGates) rowGates.classList.remove('hidden');
+    if (rowTaxiways) rowTaxiways.classList.add('hidden');
+  } else {
+    if (tabGates) tabGates.classList.remove('active');
+    if (tabTaxiways) tabTaxiways.classList.add('active');
+    if (rowGates) rowGates.classList.add('hidden');
+    if (rowTaxiways) rowTaxiways.classList.remove('hidden');
+    if (lastResult && lastResult.taxiways) {
+      populateEditorTaxiwayDropdown(lastResult.taxiways.segments);
+    }
+  }
+}
+window.switchEditorTab = switchEditorTab;
 
 function toggleVisualEditorMode(forceState) {
   isEditMode = (forceState !== undefined) ? forceState : !isEditMode;
@@ -1404,7 +1433,7 @@ function toggleVisualEditorMode(forceState) {
       selectedBayRef = lastResult.bays[0].ref;
     }
 
-    showEditorToast('✏️ Visual Editor Active: Drag badges or click "Trace Lead-In" to draw paths.');
+    showEditorToast('✏️ Visual Editor Active: Edit gates, stands, taxiways, and join paths.');
   } else {
     if (btnToggle) btnToggle.classList.remove('active');
     if (btnText) btnText.textContent = 'Visual Editor Mode';
@@ -1414,6 +1443,7 @@ function toggleVisualEditorMode(forceState) {
     }
     if (bar) bar.classList.add('hidden');
     cancelTracingLeadIn();
+    cancelJoinToTaxiway();
     const addPanel = document.getElementById('editorAddPanel');
     if (addPanel) addPanel.classList.add('hidden');
     showEditorToast('Visual Editor Closed');
@@ -1428,7 +1458,7 @@ function populateEditorBayDropdown(bays) {
   if (!selectEl) return;
 
   const currentVal = selectedBayRef || selectEl.value;
-  selectEl.innerHTML = '<option value="">-- Choose Gate/Stand --</option>';
+  selectEl.innerHTML = '<option value="">-- Choose Spot --</option>';
 
   (bays || []).forEach(b => {
     const opt = document.createElement('option');
@@ -1450,8 +1480,10 @@ function selectBayForEditing(ref) {
     const bay = lastResult.bays.find(b => b.ref === ref);
     if (bay) {
       const refInput = document.getElementById('editorRefInput');
+      const nameInput = document.getElementById('editorNameInput');
       const typeSelect = document.getElementById('editorTypeSelect');
       if (refInput) refInput.value = bay.ref;
+      if (nameInput) nameInput.value = bay.name || ((bay.has_jetbridge ? 'Gate ' : 'Stand ') + bay.ref);
       if (typeSelect) typeSelect.value = bay.type || (bay.has_jetbridge ? 'gate' : 'stand');
     }
   }
@@ -1466,6 +1498,7 @@ function applyBayEdits() {
   if (!bay) return;
 
   const refInput = document.getElementById('editorRefInput');
+  const nameInput = document.getElementById('editorNameInput');
   const typeSelect = document.getElementById('editorTypeSelect');
   if (!refInput || !typeSelect) return;
 
@@ -1478,19 +1511,214 @@ function applyBayEdits() {
   const oldRef = bay.ref;
   const newType = typeSelect.value;
   const isGate = newType === 'gate';
+  const newName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : ((isGate ? 'Gate ' : 'Stand ') + newRef);
 
   bay.ref = newRef;
   bay.type = newType;
   bay.has_jetbridge = isGate;
-  bay.name = (isGate ? 'Gate ' : 'Stand ') + newRef;
+  bay.name = newName;
 
   selectedBayRef = newRef;
   hasUnsavedChanges = true;
-  showEditorToast(`✔️ Updated Spot ${oldRef} -> ${newRef} (${isGate ? 'Gate' : 'Stand'})`);
+  showEditorToast(`✔️ Updated Spot ${oldRef} -> "${newName}" (${isGate ? 'Gate' : 'Stand'})`);
   saveEditorChanges(true);
   drawAirportTerminals(lastResult);
 }
 window.applyBayEdits = applyBayEdits;
+
+// ── Taxiway Label Editor ──────────────────────────────────────────────────────
+
+function populateEditorTaxiwayDropdown(segments) {
+  const selectEl = document.getElementById('editorTaxiwaySelect');
+  if (!selectEl) return;
+
+  const uniqueRefs = new Set();
+  (segments || []).forEach(s => {
+    if (s.ref) uniqueRefs.add(s.ref.toUpperCase().trim());
+  });
+
+  const sortedRefs = Array.from(uniqueRefs).sort();
+  selectEl.innerHTML = '<option value="">-- Choose Taxiway --</option>';
+
+  sortedRefs.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r;
+    opt.textContent = `🚖 ${r}`;
+    if (r === selectedTaxiwayRef) opt.selected = true;
+    selectEl.appendChild(opt);
+  });
+}
+
+function selectTaxiwayForEditing(ref) {
+  if (!ref) return;
+  selectedTaxiwayRef = ref;
+
+  const selectEl = document.getElementById('editorTaxiwaySelect');
+  if (selectEl) selectEl.value = ref;
+
+  const refInput = document.getElementById('editorTaxiwayRefInput');
+  const nameInput = document.getElementById('editorTaxiwayNameInput');
+  if (refInput) refInput.value = ref;
+
+  if (lastResult && lastResult.taxiways?.segments) {
+    const matching = lastResult.taxiways.segments.filter(s => s.ref && s.ref.toUpperCase().trim() === ref);
+    const sampleName = matching.find(s => s.name)?.name || ('Taxiway ' + ref);
+    if (nameInput) nameInput.value = sampleName;
+  }
+}
+window.selectTaxiwayForEditing = selectTaxiwayForEditing;
+
+async function applyTaxiwayEdits() {
+  if (!selectedTaxiwayRef || !lastResult || !lastResult.taxiways?.segments) return;
+
+  const refInput = document.getElementById('editorTaxiwayRefInput');
+  const nameInput = document.getElementById('editorTaxiwayNameInput');
+  if (!refInput) return;
+
+  const newRef = refInput.value.trim().toUpperCase();
+  const newName = nameInput ? nameInput.value.trim() : ('Taxiway ' + newRef);
+  if (!newRef) {
+    alert('Taxiway identifier cannot be empty.');
+    return;
+  }
+
+  const oldRef = selectedTaxiwayRef;
+  let countUpdated = 0;
+
+  lastResult.taxiways.segments.forEach(s => {
+    if (s.ref && s.ref.toUpperCase().trim() === oldRef) {
+      s.ref = newRef;
+      s.name = newName;
+      countUpdated++;
+    }
+  });
+
+  selectedTaxiwayRef = newRef;
+  showEditorToast(`✔️ Renamed Taxiway ${oldRef} -> "${newName}" (${countUpdated} segments)`);
+  saveTaxiwayChanges(false);
+  if (lastResult.taxiways) drawTaxiways(lastResult.taxiways);
+}
+window.applyTaxiwayEdits = applyTaxiwayEdits;
+
+async function saveTaxiwayChanges(isSilent = false) {
+  if (!lastResult || !lastResult.taxiways?.segments) return;
+  const icao = lastResult.airport?.icao || lastResult.active_runway?.airport_icao || currentIcao || 'KLGA';
+
+  try {
+    const res = await fetch('/api/taxiways/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        icao: icao,
+        segments: lastResult.taxiways.segments
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (!isSilent) showEditorToast(`💾 Saved ${data.count} taxiway segments for ${icao} to database!`);
+    }
+  } catch (e) {
+    if (!isSilent) alert('Error saving taxiways: ' + e.message);
+  }
+}
+window.saveTaxiwayChanges = saveTaxiwayChanges;
+
+// ── Interactive "Join / Snap to Taxiway" Feature ──────────────────────────────
+
+function startJoinToTaxiway() {
+  if (!lastResult || !lastResult.bays) {
+    showEditorToast('⚠️ Load an airport first before joining paths.');
+    return;
+  }
+  if (!selectedBayRef && lastResult.bays.length > 0) {
+    selectedBayRef = lastResult.bays[0].ref;
+  }
+  const bay = lastResult.bays.find(b => b.ref === selectedBayRef);
+  if (!bay) {
+    showEditorToast('⚠️ Select a gate or stand first.');
+    return;
+  }
+
+  cancelTracingLeadIn();
+  cancelJoinToTaxiway();
+
+  isSnappingToTaxiway = true;
+
+  const banner = document.getElementById('snapInstructionBanner');
+  const refSpan = document.getElementById('snapBayRef');
+  if (banner) banner.classList.remove('hidden');
+  if (refSpan) refSpan.textContent = bay.name || bay.ref;
+
+  const btnJoin = document.getElementById('editorBtnJoinTaxiway');
+  if (btnJoin) btnJoin.classList.add('active');
+
+  const mapContainer = document.getElementById('map');
+  if (mapContainer) mapContainer.classList.add('crosshair-cursor');
+
+  showEditorToast(`🔗 Click directly on any taxiway or ramp taxilane centerline to snap and weld ${bay.ref}'s path.`);
+
+  snapClickListener = function(e) {
+    if (!isSnappingToTaxiway) return;
+    const clickLatLng = e.latlng;
+    
+    // Find closest taxiway segment and snap coordinate
+    let closestCoord = null;
+    let closestTaxiwayName = null;
+    let minD = Infinity;
+
+    (lastResult.taxiways?.segments || []).forEach(seg => {
+      const coords = seg.coordinates || [];
+      for (let i = 0; i < coords.length; i++) {
+        const d = haversine(clickLatLng.lat, clickLatLng.lng, coords[i][0], coords[i][1]);
+        if (d < minD) {
+          minD = d;
+          closestCoord = coords[i];
+          closestTaxiwayName = seg.ref || seg.name || 'Taxiway';
+        }
+      }
+    });
+
+    if (closestCoord && minD < 120.0) {
+      // Weld the lead-in line endpoint to this exact taxiway coordinate
+      if (!bay.lead_in_coords || bay.lead_in_coords.length < 2) {
+        bay.lead_in_coords = [[bay.lat, bay.lon], closestCoord];
+      } else {
+        // Replace the end of the line with the snapped coordinate
+        bay.lead_in_coords[bay.lead_in_coords.length - 1] = closestCoord;
+      }
+
+      hasUnsavedChanges = true;
+      showEditorToast(`🔗 Successfully snapped and welded ${bay.ref} to ${closestTaxiwayName}!`);
+      saveEditorChanges(true);
+      drawAirportTerminals(lastResult);
+    } else {
+      showEditorToast('⚠️ Click closer to a taxiway or taxilane centerline to weld.');
+    }
+
+    cancelJoinToTaxiway();
+  };
+
+  map.on('click', snapClickListener);
+}
+window.startJoinToTaxiway = startJoinToTaxiway;
+
+function cancelJoinToTaxiway() {
+  isSnappingToTaxiway = false;
+  const banner = document.getElementById('snapInstructionBanner');
+  if (banner) banner.classList.add('hidden');
+
+  const btnJoin = document.getElementById('editorBtnJoinTaxiway');
+  if (btnJoin) btnJoin.classList.remove('active');
+
+  const mapContainer = document.getElementById('map');
+  if (mapContainer) mapContainer.classList.remove('crosshair-cursor');
+
+  if (snapClickListener) {
+    map.off('click', snapClickListener);
+    snapClickListener = null;
+  }
+}
+window.cancelJoinToTaxiway = cancelJoinToTaxiway;
 
 function updateEditorToolbar() {
   const bar = document.getElementById('floatingEditorBar');
@@ -1498,6 +1726,7 @@ function updateEditorToolbar() {
 
   const infoEl = document.getElementById('editorInfoLabel');
   const refInput = document.getElementById('editorRefInput');
+  const nameInput = document.getElementById('editorNameInput');
   const typeSelect = document.getElementById('editorTypeSelect');
   const btnClear = document.getElementById('editorBtnClearLeadIn');
 
@@ -1513,11 +1742,12 @@ function updateEditorToolbar() {
   }
 
   if (refInput && document.activeElement !== refInput) refInput.value = bay.ref;
+  if (nameInput && document.activeElement !== nameInput) nameInput.value = bay.name || ((bay.has_jetbridge ? 'Gate ' : 'Stand ') + bay.ref);
   if (typeSelect && document.activeElement !== typeSelect) typeSelect.value = bay.type || (bay.has_jetbridge ? 'gate' : 'stand');
 
   const hasLeadIn = bay.lead_in_coords && bay.lead_in_coords.length >= 2;
   if (infoEl) {
-    infoEl.innerHTML = `Pos: ${bay.lat.toFixed(5)}, ${bay.lon.toFixed(5)} ${hasLeadIn ? '<span style="color:#facc15; font-weight:800;">[Custom Line: ' + bay.lead_in_coords.length + ' pts]</span>' : '<span style="color:#94a3b8;">[Direct Taxilane Connector]</span>'}`;
+    infoEl.innerHTML = `Pos: ${bay.lat.toFixed(5)}, ${bay.lon.toFixed(5)} ${hasLeadIn ? '<span style="color:#facc15; font-weight:800;">[Traced Path: ' + bay.lead_in_coords.length + ' pts]</span>' : '<span style="color:#94a3b8;">[Direct Connector]</span>'}`;
   }
 
   if (btnClear) {
@@ -1556,6 +1786,7 @@ function startTracingLeadIn() {
   }
 
   cancelTracingLeadIn(); // clear any previous listeners
+  cancelJoinToTaxiway();
 
   isTracingLeadIn = true;
   // Start line directly at the selected bay parking spot!
@@ -1780,7 +2011,6 @@ function deleteSelectedBay() {
 window.deleteSelectedBay = deleteSelectedBay;
 
 async function saveEditorChanges(isSilent = false) {
-  // Normalize if passed a MouseEvent object from DOM listener
   if (isSilent && typeof isSilent === 'object') {
     isSilent = false;
   }
@@ -1806,7 +2036,6 @@ async function saveEditorChanges(isSilent = false) {
     if (data.success) {
       hasUnsavedChanges = false;
       
-      // Visual button feedback
       if (saveBtn) {
         saveBtn.style.background = '#059669';
         if (saveIcon) saveIcon.textContent = '✅';

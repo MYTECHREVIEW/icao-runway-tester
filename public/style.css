@@ -1731,3 +1731,72 @@ input:checked + .slider:before {
   border-color: #ffffff;
   box-shadow: 0 0 12px #38bdf8;
 }
+
+
+/* ── Editor Tabs & Join Button ─────────────────────────────────────────────── */
+
+.editor-tab-group {
+  display: flex;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.editor-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.editor-tab:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.editor-tab.active {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+}
+
+.editor-btn.action-join {
+  background: rgba(14, 165, 233, 0.2);
+  border-color: rgba(14, 165, 233, 0.5);
+  color: #38bdf8;
+}
+.editor-btn.action-join:hover {
+  background: #0284c7;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
+}
+.editor-btn.action-join.active {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  border-color: #38bdf8 !important;
+}
+
+.weld-junction-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 12px #38bdf8;
+  animation: pulseWeld 1.5s infinite;
+}
+
+@keyframes pulseWeld {
+  0% { transform: scale(0.9); box-shadow: 0 0 8px #38bdf8; }
+  50% { transform: scale(1.3); box-shadow: 0 0 16px #38bdf8; }
+  100% { transform: scale(0.9); box-shadow: 0 0 8px #38bdf8; }
+}

@@ -362,15 +362,13 @@
     <div class="editor-bar-header">
       <div class="editor-status-badge">
         <span class="pulse-dot"></span>
-        <span>VISUAL MAP EDITOR</span>
+        <span>VISUAL MAP &amp; LABEL EDITOR</span>
       </div>
 
-      <!-- Quick Spot Selector Dropdown -->
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <label style="font-size: 11px; color: var(--text-secondary); font-weight: 700;">Select Spot:</label>
-        <select id="editorBaySelect" class="editor-select" onchange="window.selectBayForEditing(this.value)">
-          <option value="">-- Choose Gate/Stand --</option>
-        </select>
+      <!-- Editor Mode Tabs (Gates/Stands vs Taxiways) -->
+      <div class="editor-tab-group">
+        <button id="tabEditGates" class="editor-tab active" onclick="window.switchEditorTab('gates')">🚪 Gates &amp; Stands</button>
+        <button id="tabEditTaxiways" class="editor-tab" onclick="window.switchEditorTab('taxiways')">🚖 Taxiways &amp; Lanes</button>
       </div>
 
       <button id="editorBtnExit" class="editor-btn action-exit" title="Exit visual editor" onclick="window.toggleVisualEditorMode(false)">
@@ -378,13 +376,20 @@
       </button>
     </div>
 
-    <!-- Active Selected Bay Editor Row -->
-    <div id="editorActiveBayRow" class="editor-edit-row">
+    <!-- 1. Active Gate/Stand Editor Row -->
+    <div id="editorGatesRow" class="editor-edit-row">
       <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Number:</span>
-        <input type="text" id="editorRefInput" class="editor-input" placeholder="e.g. 52" style="width: 75px;" />
+        <label style="font-size: 11px; color: var(--text-secondary); font-weight: 700;">Spot:</label>
+        <select id="editorBaySelect" class="editor-select" style="max-width: 140px;" onchange="window.selectBayForEditing(this.value)">
+          <option value="">-- Choose Spot --</option>
+        </select>
+
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700; margin-left: 4px;">Number:</span>
+        <input type="text" id="editorRefInput" class="editor-input" placeholder="e.g. 52" style="width: 65px;" />
         
-        <select id="editorTypeSelect" class="editor-select" style="width: 100px;">
+        <input type="text" id="editorNameInput" class="editor-input" placeholder="Display Name (e.g. Gate 52)" style="width: 130px;" />
+
+        <select id="editorTypeSelect" class="editor-select" style="width: 90px;">
           <option value="gate">🚪 Gate</option>
           <option value="stand">🅿️ Stand</option>
         </select>
@@ -399,12 +404,36 @@
           <span>✏️</span> <span id="traceBtnText">Trace Lead-In</span>
         </button>
 
+        <button id="editorBtnJoinTaxiway" class="editor-btn action-join" title="Snap & weld lead-in path to a taxiway" onclick="window.startJoinToTaxiway()">
+          <span>🔗</span> Join to Taxiway
+        </button>
+
         <button id="editorBtnClearLeadIn" class="editor-btn action-clear" title="Reset custom lead-in line" onclick="window.clearLeadInPath()">
           <span>🔄</span> Reset Path
         </button>
 
         <button id="editorBtnDeleteBay" class="editor-btn action-delete" title="Delete selected spot" onclick="window.deleteSelectedBay()">
-          <span>🗑️</span> Delete
+          <span>🗑️</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. Active Taxiway / Taxilane Label Editor Row -->
+    <div id="editorTaxiwaysRow" class="editor-edit-row hidden">
+      <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+        <label style="font-size: 11px; color: var(--text-secondary); font-weight: 700;">Taxiway / Lane:</label>
+        <select id="editorTaxiwaySelect" class="editor-select" style="max-width: 140px;" onchange="window.selectTaxiwayForEditing(this.value)">
+          <option value="">-- Choose Taxiway --</option>
+        </select>
+
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700; margin-left: 4px;">Sign / Ref:</span>
+        <input type="text" id="editorTaxiwayRefInput" class="editor-input" placeholder="e.g. LANE 8, B, G" style="width: 85px;" />
+
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Full Name:</span>
+        <input type="text" id="editorTaxiwayNameInput" class="editor-input" placeholder="e.g. Ramp Taxilane 8" style="width: 160px;" />
+
+        <button id="editorBtnApplyTaxiwayEdit" class="editor-btn action-apply" title="Apply taxiway label change" onclick="window.applyTaxiwayEdits()">
+          <span>✔️</span> Update Label
         </button>
       </div>
     </div>
@@ -413,7 +442,7 @@
     <div class="editor-actions" style="justify-content: space-between; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 8px;">
       <div style="display: flex; gap: 6px; align-items: center;">
         <button id="editorBtnToggleAddForm" class="editor-btn action-add" title="Open add new gate/stand form" onclick="window.toggleAddSpotPanel()">
-          <span>➕</span> Add New Spot
+          <span>➕</span> Add Spot
         </button>
         <span id="editorInfoLabel" style="font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono);"></span>
       </div>
@@ -441,7 +470,8 @@
       </div>
     </div>
   </div>
-<!-- Instruction Banner while Tracing -->
+
+  <!-- Instruction Banner while Tracing -->
   <div id="tracingInstructionBanner" class="tracing-banner hidden">
     <div style="display: flex; align-items: center; gap: 10px;">
       <span style="font-size: 22px;">✏️</span>
@@ -460,7 +490,26 @@
       <button id="btnCancelTracing" class="tracing-btn-cancel" onclick="window.cancelTracingLeadIn()">✕ Cancel</button>
     </div>
   </div>
-<!-- Toast Notification -->
+
+  <!-- Instruction Banner while Snapping to Taxiway -->
+  <div id="snapInstructionBanner" class="tracing-banner hidden" style="border-color: #38bdf8; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8), 0 0 16px rgba(56, 189, 248, 0.5);">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="font-size: 22px;">🔗</span>
+      <div>
+        <div style="font-size: 12px; font-weight: 800; color: #38bdf8;">
+          Join Path to Taxiway for <span id="snapBayRef" style="color: #ffffff; text-decoration: underline;">--</span>
+        </div>
+        <div style="font-size: 11px; color: #cbd5e1; margin-top: 2px;">
+          Click directly on the target <strong>taxiway or ramp taxilane centerline</strong> to weld the paths together.
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="tracing-btn-cancel" onclick="window.cancelJoinToTaxiway()">✕ Cancel</button>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
   <div id="editorToast" class="editor-toast hidden"></div>
 
 </body>
