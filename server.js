@@ -934,6 +934,137 @@ app.post('/api/analyze', async (req, res) => {
     });
 });
 
+
+// ── POST /api/taxi-route — Progressive Taxi Routing API ───────────────────────
+app.post('/api/taxi-route', async (req, res) => {
+  try {
+    const { icao, route } = req.body;
+    if (!icao || !route) {
+      return res.status(400).json({ error: 'icao and route are required' });
+    }
+
+    const upperIcao = icao.toUpperCase().trim();
+    const apt = airportsDb[upperIcao];
+    const taxiways = await getAirportTaxiways(upperIcao, apt?.latitude, apt?.longitude);
+    const allSources = await fetchAllAirportSources(upperIcao);
+    const operational = resolveActiveOperational(allSources, 'real_world');
+
+    // Extract closed taxiway designators from NOTAMs
+    const closedRefs = new Set();
+    if (operational && operational.notams) {
+      for (const n of operational.notams) {
+        if (/\b(?:TAXIWAY|TWY|APRON|RAMP)\b/i.test(n.text) && /\b(?:CLSD|CLOSED|UNUSABLE)\b/i.test(n.text)) {
+          const m = n.text.match(/\b(?:TAXIWAY|TWY)\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)*)/i);
+          if (m && m[1]) {
+            const parts = m[1].split(/\s+/);
+            for (const p of parts) {
+              const up = p.toUpperCase();
+              if (['CLOSED', 'CLSD', 'WEST', 'EAST', 'NORTH', 'SOUTH', 'OF', 'FOR', 'BETWEEN', 'AND'].includes(up)) break;
+              closedRefs.add(up);
+            }
+          }
+        }
+      }
+    }
+
+    // Split route string by commas, spaces, dashes, or arrows
+    const tokens = route
+      .split(/[,\s\->\+]+/g)
+      .map(t => t.trim().toUpperCase())
+      .filter(Boolean);
+
+    if (tokens.length === 0) {
+      return res.status(400).json({ error: 'No valid taxiway tokens found' });
+    }
+
+    const legs = [];
+    let combinedCoordinates = [];
+    let totalDistM = 0;
+    let hasClosures = false;
+
+    // Helper: calculate distance between two lat/lons
+    const geoDistM = (lat1, lon1, lat2, lon2) => {
+      const R = 6371000;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    };
+
+    let lastPoint = null;
+
+    for (let i = 0; i < tokens.length; i++) {
+      let rawToken = tokens[i];
+      let cleanRef = rawToken.replace(/^(TWY|TAXIWAY|RWY|RUNWAY|RW)/i, '').trim() || rawToken;
+
+      const isClosed = closedRefs.has(cleanRef) || closedRefs.has(rawToken);
+      if (isClosed) hasClosures = true;
+
+      // Find matching taxiway segments (case-insensitive)
+      const matched = taxiways.filter(t => (t.ref && t.ref.toUpperCase() === cleanRef) || (t.ref && t.ref.toUpperCase() === rawToken));
+      
+      let legCoords = [];
+      let legDistM = 0;
+
+      if (matched.length > 0) {
+        // Collect all segments and orient them forward from lastPoint
+        matched.forEach(seg => {
+          if (!seg.coordinates || seg.coordinates.length < 2) return;
+          let coords = [...seg.coordinates];
+          if (lastPoint) {
+            const dStart = geoDistM(lastPoint[0], lastPoint[1], coords[0][0], coords[0][1]);
+            const dEnd   = geoDistM(lastPoint[0], lastPoint[1], coords[coords.length-1][0], coords[coords.length-1][1]);
+            if (dEnd < dStart) {
+              coords.reverse();
+            }
+          }
+          legCoords.push(...coords);
+          lastPoint = coords[coords.length - 1];
+        });
+      }
+
+      // Calculate leg distance
+      for (let j = 0; j < legCoords.length - 1; j++) {
+        legDistM += geoDistM(legCoords[j][0], legCoords[j][1], legCoords[j+1][0], legCoords[j+1][1]);
+      }
+
+      totalDistM += legDistM;
+      combinedCoordinates.push(...legCoords);
+
+      legs.push({
+        step: i + 1,
+        token: rawToken,
+        ref: cleanRef,
+        is_closed: isClosed,
+        distance_ft: Math.round(legDistM * 3.28084),
+        distance_m: Math.round(legDistM),
+        segment_count: matched.length,
+        coordinates: legCoords
+      });
+    }
+
+    const totalDistFt = Math.round(totalDistM * 3.28084);
+    // Standard taxi speed ~ 15 kts = 7.7 m/s
+    const estTimeSec = totalDistM > 0 ? Math.round(totalDistM / 7.7) : 0;
+
+    return res.json({
+      icao: upperIcao,
+      route_raw: route,
+      tokens,
+      has_closures: hasClosures,
+      total_distance_ft: totalDistFt,
+      total_distance_m: Math.round(totalDistM),
+      est_time_sec: estTimeSec,
+      legs,
+      path_coordinates: combinedCoordinates
+    });
+
+  } catch (err) {
+    console.error('Taxi route error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
     console.log(`\n🗺  ICAO Runway Tester running at: http://localhost:${PORT}`);
 });
