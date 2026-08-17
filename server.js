@@ -88,6 +88,23 @@ if (!fs.existsSync(TAXIWAY_CACHE_DIR)) {
     try { fs.mkdirSync(TAXIWAY_CACHE_DIR, { recursive: true }); } catch (e) {}
 }
 
+
+const TERMINALS_CACHE_DIR = path.join(__dirname, 'data', 'terminals-cache');
+if (!fs.existsSync(TERMINALS_CACHE_DIR)) {
+    try { fs.mkdirSync(TERMINALS_CACHE_DIR, { recursive: true }); } catch (e) {}
+}
+
+let seedTerminals = {};
+try {
+    const termPath = path.join(__dirname, 'data', 'terminals.json');
+    if (fs.existsSync(termPath)) {
+        seedTerminals = JSON.parse(fs.readFileSync(termPath, 'utf8'));
+        console.log(`  ✅ Loaded terminals seed database for ${Object.keys(seedTerminals).length} airports`);
+    }
+} catch (e) {
+    console.warn('  ⚠️ Terminals seed database not loaded:', e.message);
+}
+
 let seedTaxiways = {};
 try {
     const seedPath = fs.existsSync(path.join(__dirname, 'data', 'taxiways.json'))
@@ -204,6 +221,169 @@ async function getAirportTaxiways(icao, lat, lon) {
         try { fs.writeFileSync(cacheFile, JSON.stringify(segments)); } catch (e) {}
     }
     return segments;
+}
+
+
+function queryOverpassTerminals(lat, lon) {
+    const query = `[out:json][timeout:15];(way["aeroway"~"terminal|gate|parking_position|stand"](around:4000,${lat},${lon});node["aeroway"~"gate|parking_position|stand"](around:4000,${lat},${lon}););out geom;`;
+    const postData = querystring.stringify({ data: query });
+
+    const endpoints = [
+        'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+        'https://overpass-api.de/api/interpreter'
+    ];
+
+    return new Promise((resolve) => {
+        let tried = 0;
+        function tryNext() {
+            if (tried >= endpoints.length) return resolve({ terminals: [], gates: [], stands: [] });
+            const ep = endpoints[tried++];
+            const urlObj = new URL(ep);
+
+            const req = https.request({
+                hostname: urlObj.hostname,
+                path: urlObj.pathname,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Content-Length': Buffer.byteLength(postData),
+                    'User-Agent': 'MYTECHREVIEW/icao-terminal-database'
+                },
+                timeout: 8000
+            }, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                    try {
+                        const raw = JSON.parse(data);
+                        if (!raw || !raw.elements) return tryNext();
+
+                        const terminals = [];
+                        const gates = [];
+                        const stands = [];
+
+                        for (const el of raw.elements) {
+                            const tags = el.tags || {};
+                            const aw = tags.aeroway || '';
+
+                            if (aw === 'terminal' || tags.building === 'terminal') {
+                                let coords = [];
+                                if (el.geometry) {
+                                    coords = el.geometry.map(g => [Number(g.lat.toFixed(6)), Number(g.lon.toFixed(6))]);
+                                } else if (el.lat && el.lon) {
+                                    coords = [[Number(el.lat.toFixed(6)), Number(el.lon.toFixed(6))]];
+                                }
+                                if (coords.length > 0) {
+                                    terminals.push({
+                                        id: el.id,
+                                        name: tags.name || (tags.ref ? `Terminal ${tags.ref}` : 'Terminal'),
+                                        ref: tags.ref || (tags.name ? tags.name.replace(/^Terminal\s*/i, '') : null),
+                                        building: tags.building || 'terminal',
+                                        polygon: coords
+                                    });
+                                }
+                            } else if (aw === 'gate') {
+                                let lat = el.lat;
+                                let lon = el.lon;
+                                if (!lat && el.geometry && el.geometry.length > 0) {
+                                    lat = el.geometry[0].lat;
+                                    lon = el.geometry[0].lon;
+                                }
+                                if (lat && lon) {
+                                    const rawRef = tags.ref || (tags.name && !/^[0-9]{5,}$/.test(tags.name) ? tags.name.replace(/^Gate\s*/i, '') : null);
+                                    if (rawRef && !/^[0-9]{5,}$/.test(rawRef.trim())) {
+                                        gates.push({
+                                            id: el.id,
+                                            ref: rawRef.toUpperCase().trim(),
+                                            name: tags.name || `Gate ${rawRef.toUpperCase().trim()}`,
+                                            lat: Number(lat.toFixed(6)),
+                                            lon: Number(lon.toFixed(6))
+                                        });
+                                    }
+                                }
+                            } else if (aw === 'parking_position' || aw === 'stand') {
+                                let lat = el.lat;
+                                let lon = el.lon;
+                                if (!lat && el.geometry && el.geometry.length > 0) {
+                                    lat = el.geometry[0].lat;
+                                    lon = el.geometry[0].lon;
+                                }
+                                if (lat && lon) {
+                                    const rawRef = tags.ref || (tags.name && !/^[0-9]{5,}$/.test(tags.name) ? tags.name.replace(/^(Stand|Position)\s*/i, '') : null);
+                                    if (rawRef && !/^[0-9]{5,}$/.test(rawRef.trim())) {
+                                        stands.push({
+                                            id: el.id,
+                                            ref: rawRef.toUpperCase().trim(),
+                                            name: tags.name || `Stand ${rawRef.toUpperCase().trim()}`,
+                                            max_wingspan_m: tags.max_wingspan ? parseFloat(tags.max_wingspan) : null,
+                                            lat: Number(lat.toFixed(6)),
+                                            lon: Number(lon.toFixed(6))
+                                        });
+                                    }
+                                }
+                            }
+                        }
+
+                        return resolve({ terminals, gates, stands });
+                    } catch (e) {
+                        tryNext();
+                    }
+                });
+            });
+            req.on('error', () => tryNext());
+            req.on('timeout', () => { req.destroy(); tryNext(); });
+            req.write(postData);
+            req.end();
+        }
+        tryNext();
+    });
+}
+
+async function getAirportTerminals(icao, lat, lon) {
+    if (!icao) return { terminals: [], gates: [], stands: [] };
+    icao = icao.toUpperCase().trim();
+
+    // 1. Check in-memory seed DB
+    if (seedTerminals[icao]) {
+        const item = seedTerminals[icao];
+        if (!item.bays || item.bays.length === 0) {
+            item.bays = mergeGatesAndStands(item.gates || [], item.stands || []);
+        }
+        return item;
+    }
+
+    // 2. Check disk cache
+    const cacheFile = path.join(TERMINALS_CACHE_DIR, `${icao}.json`);
+    if (fs.existsSync(cacheFile)) {
+        try {
+            return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+        } catch (e) {}
+    }
+
+    // 3. Dynamic Overpass fetch
+    if (lat === undefined || lon === undefined) {
+        const apt = airportsDb[icao];
+        if (apt) { lat = apt.latitude; lon = apt.longitude; }
+    }
+    if (lat === undefined || lon === undefined) return { terminals: [], gates: [], stands: [] };
+
+    const data = await queryOverpassTerminals(lat, lon);
+    const gList = data.gates || [];
+    const sList = data.stands || [];
+    const bays = data.bays || mergeGatesAndStands(gList, sList);
+
+    const result = {
+        icao,
+        terminals: data.terminals || [],
+        gates: gList,
+        stands: sList,
+        bays: bays
+    };
+
+    if (result.terminals.length > 0 || result.gates.length > 0 || result.stands.length > 0) {
+        try { fs.writeFileSync(cacheFile, JSON.stringify(result)); } catch (e) {}
+    }
+    return result;
 }
 
 // ── Geodesic Math ─────────────────────────────────────────────────────────────
@@ -710,6 +890,20 @@ app.use(express.json());
 
 const DEFAULT_MB = Buffer.from('cGsuZXlKMUlqb2liWGwwWldOb2NtVjJhV1YzSWl3aVlTSTZJbU50YTNJM2JXTjVlVEJpTnpBelpuQjFkM3BuTm1WMWFXMGlmUS5lM1A2MG9ybF93U0NVYjUtMVJKR3pn', 'base64').toString('utf8');
 
+app.get('/api/terminals', async (req, res) => {
+    const icao = (req.query.icao || '').toUpperCase().trim();
+    if (!icao) return res.status(400).json({ error: 'icao is required' });
+    const apt = airportsDb[icao];
+    const data = await getAirportTerminals(icao, apt?.latitude, apt?.longitude);
+    res.json({
+        icao,
+        terminals_count: data.terminals.length,
+        gates_count: data.gates.length,
+        stands_count: data.stands.length,
+        ...data
+    });
+});
+
 app.get('/api/taxiways', async (req, res) => {
     const icao = (req.query.icao || '').toUpperCase().trim();
     if (!icao) return res.status(400).json({ error: 'icao is required' });
@@ -737,10 +931,14 @@ app.post('/api/analyze', async (req, res) => {
     const candidateRunways = findNearbyGridItems(runwayGrid, lat, lon, 0.12);
     const candidateAirports = findNearbyGridItems(airportGrid, lat, lon, 0.15);
 
-    // 1. Direct Runway Pavement Check
+    // 1. Direct Runway Pavement Check (Only match genuine paved land runways)
     let onRunwayAirportIcao = null;
 
     for (const rwy of candidateRunways) {
+        if (rwy.surface === 'water') continue;
+        const apt = airportsDb[rwy.airport_icao] || {};
+        if (apt.type === 'seaplane_base' || apt.type === 'heliport') continue;
+
         const leLat = rwy.le_latitude, leLon = rwy.le_longitude;
         const heLat = rwy.he_latitude, heLon = rwy.he_longitude;
         if (leLat === null || heLat === null || leLon === null || heLon === null) continue;
@@ -751,12 +949,8 @@ app.post('/api/analyze', async (req, res) => {
         const atd = alongTrack(leLat, leLon, heLat, heLon, lat, lon);
 
         if (xtd <= halfWidth_m && atd >= -10 && atd <= totalLen_m + 10) {
-            const apt = airportsDb[rwy.airport_icao] || {};
-            const isLand = apt.type !== 'seaplane_base' && rwy.surface !== 'water';
-            if (isLand || !onRunwayAirportIcao) {
-                onRunwayAirportIcao = rwy.airport_icao;
-                if (isLand) break;
-            }
+            onRunwayAirportIcao = rwy.airport_icao;
+            break;
         }
     }
 
@@ -771,12 +965,12 @@ app.post('/api/analyze', async (req, res) => {
             if (dist > 8000) continue;
 
             let weight = 1.0;
-            if (apt.type === 'large_airport') weight = 0.5;
-            else if (apt.type === 'medium_airport') weight = 0.7;
-            else if (apt.type === 'small_airport') weight = 0.9;
-            else if (apt.type === 'seaplane_base') weight = 2.5;
-            else if (apt.type === 'heliport') weight = 2.0;
-            else if (apt.type === 'closed') weight = 4.0;
+            if (apt.type === 'large_airport') weight = 0.15;
+            else if (apt.type === 'medium_airport') weight = 0.35;
+            else if (apt.type === 'small_airport') weight = 0.8;
+            else if (apt.type === 'seaplane_base') weight = 15.0;
+            else if (apt.type === 'heliport') weight = 10.0;
+            else if (apt.type === 'closed') weight = 20.0;
 
             scoredAirports.push({ icao: apt.icao, dist, weightedDist: dist * weight, apt });
         }
@@ -848,6 +1042,7 @@ app.post('/api/analyze', async (req, res) => {
 
     // 5. Fetch & Correlate Taxiways with NOTAMs
     const rawTaxiways = selectedAirportIcao ? await getAirportTaxiways(selectedAirportIcao, primaryAirport?.latitude, primaryAirport?.longitude) : [];
+    const terminalData = selectedAirportIcao ? await getAirportTerminals(selectedAirportIcao, primaryAirport?.latitude, primaryAirport?.longitude) : { terminals: [], gates: [], stands: [] };
     
     // Extract closed taxiway designators from NOTAMs
     const closedTwyMap = new Map();
@@ -930,23 +1125,259 @@ app.post('/api/analyze', async (req, res) => {
         on_taxiway: onTaxiway,
         active_taxiway: activeTaxiway,
         taxiways: analyzedTaxiways,
+        terminals: terminalData.terminals || [],
+        gates: terminalData.gates || [],
+        stands: terminalData.stands || [],
+        bays: terminalData.bays || mergeGatesAndStands(terminalData.gates || [], terminalData.stands || []),
         runways: analyzedRunways
     });
 });
 
 
+
+function calculateBearing(lat1, lon1, lat2, lon2) {
+  const RAD = Math.PI / 180;
+  const phi1 = lat1 * RAD, phi2 = lat2 * RAD;
+  const dLon = (lon2 - lon1) * RAD;
+  const y = Math.sin(dLon) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function mergeGatesAndStands(gates = [], stands = []) {
+  const bays = [];
+  const usedStands = new Set();
+  const usedRefs = new Map();
+
+  // 1. Process Gates
+  (gates || []).forEach(g => {
+    if (!g.lat || !g.lon || !g.ref) return;
+    const cleanRef = g.ref.toUpperCase().trim();
+
+    // Match only stands sharing the same base reference (e.g. 48 with 48, 48A with 48A)
+    let match = (stands || []).find(s => s.ref && s.ref.toUpperCase().trim() === cleanRef && !usedStands.has(s.id));
+    if (!match) {
+      match = (stands || []).find(s => {
+        if (!s.ref || usedStands.has(s.id) || !s.lat || !s.lon) return false;
+        const sRef = s.ref.toUpperCase().trim();
+        const sameBase = sRef.replace(/[A-Z]/g, "") === cleanRef.replace(/[A-Z]/g, "");
+        if (!sameBase) return false;
+        const d = haversine(g.lat, g.lon, s.lat, s.lon);
+        return d <= 120.0;
+      });
+    }
+
+    if (match) {
+      usedStands.add(match.id);
+      const heading = calculateBearing(match.lat, match.lon, g.lat, g.lon);
+      bays.push({
+        id: "bay_" + cleanRef,
+        ref: cleanRef,
+        name: `Gate ${cleanRef}`,
+        type: "gate",
+        has_jetbridge: true,
+        lat: match.lat,
+        lon: match.lon,
+        jetbridge_lat: g.lat,
+        jetbridge_lon: g.lon,
+        heading: Math.round(heading),
+        max_wingspan_m: match.max_wingspan_m || null
+      });
+      usedRefs.set(cleanRef, true);
+    } else {
+      bays.push({
+        id: "bay_" + cleanRef,
+        ref: cleanRef,
+        name: `Gate ${cleanRef}`,
+        type: "gate",
+        has_jetbridge: true,
+        lat: g.lat,
+        lon: g.lon,
+        jetbridge_lat: g.lat,
+        jetbridge_lon: g.lon,
+        heading: 0,
+        max_wingspan_m: null
+      });
+      usedRefs.set(cleanRef, true);
+    }
+  });
+
+  // 2. Process Remaining Stands (e.g. 48A, 48R, remote apron stands)
+  (stands || []).forEach(s => {
+    if (!s.lat || !s.lon || !s.ref || usedStands.has(s.id)) return;
+    const cleanRef = s.ref.toUpperCase().trim();
+    if (usedRefs.has(cleanRef)) return;
+
+    bays.push({
+      id: "bay_" + cleanRef,
+      ref: cleanRef,
+      name: `Stand ${cleanRef}`,
+      type: "stand",
+      has_jetbridge: false,
+      lat: s.lat,
+      lon: s.lon,
+      jetbridge_lat: null,
+      jetbridge_lon: null,
+      heading: 0,
+      max_wingspan_m: s.max_wingspan_m || null
+    });
+    usedRefs.set(cleanRef, true);
+  });
+
+  return bays;
+}
+
+
+// ── POST /api/terminals/save — Persist Calibrated Gates, Stands & Lead-In Paths ─
+
+app.post('/api/terminals/save', (req, res) => {
+  try {
+    const { icao, bays, terminals } = req.body;
+    if (!icao) {
+      return res.status(400).json({ error: 'icao is required' });
+    }
+
+    const upperIcao = icao.toUpperCase().trim();
+    const cleanBays = Array.isArray(bays) ? bays : [];
+
+    // Derive synchronized gates and stands directly from cleanBays
+    const cleanGates = [];
+    const cleanStands = [];
+
+    cleanBays.forEach((b, idx) => {
+      if (!b.ref || !b.lat || !b.lon) return;
+      const refStr = String(b.ref).toUpperCase().trim();
+      const isGate = b.type === 'gate' || b.has_jetbridge;
+      
+      if (isGate) {
+        cleanGates.push({
+          id: b.gate_id || parseInt('610' + String(idx).padStart(5, '0')),
+          ref: refStr,
+          name: b.name || ('Gate ' + refStr),
+          lat: b.jetbridge_lat || b.lat,
+          lon: b.jetbridge_lon || b.lon,
+          lead_in_coords: b.lead_in_coords || null
+        });
+        cleanStands.push({
+          id: b.stand_id || parseInt('100' + String(idx).padStart(5, '0')),
+          ref: refStr,
+          name: 'Stand ' + refStr,
+          max_wingspan_m: b.max_wingspan_m || null,
+          lat: b.lat,
+          lon: b.lon,
+          lead_in_coords: b.lead_in_coords || null
+        });
+      } else {
+        cleanStands.push({
+          id: b.stand_id || parseInt('100' + String(idx).padStart(5, '0')),
+          ref: refStr,
+          name: b.name || ('Stand ' + refStr),
+          max_wingspan_m: b.max_wingspan_m || null,
+          lat: b.lat,
+          lon: b.lon,
+          lead_in_coords: b.lead_in_coords || null
+        });
+      }
+    });
+
+    const airportData = {
+      icao: upperIcao,
+      terminals: Array.isArray(terminals) ? terminals : (seedTerminals[upperIcao]?.terminals || []),
+      gates: cleanGates,
+      stands: cleanStands,
+      bays: cleanBays
+    };
+
+    // 1. Update in-memory seed DB
+    seedTerminals[upperIcao] = airportData;
+
+    // 2. Persist to data/terminals.json
+    try {
+      let allDb = {};
+      if (fs.existsSync(TERMINALS_DB_PATH)) {
+        allDb = JSON.parse(fs.readFileSync(TERMINALS_DB_PATH, 'utf8'));
+      }
+      allDb[upperIcao] = airportData;
+      fs.writeFileSync(TERMINALS_DB_PATH, JSON.stringify(allDb, null, 2));
+    } catch (e) {
+      console.warn('Could not write to terminals.json:', e.message);
+    }
+
+    // 3. Persist to disk cache
+    try {
+      const cacheFile = path.join(TERMINALS_CACHE_DIR, `${upperIcao}.json`);
+      fs.writeFileSync(cacheFile, JSON.stringify(airportData, null, 2));
+    } catch (e) {}
+
+    console.log(`💾 Successfully saved ${cleanBays.length} parking positions and lead-in lines for ${upperIcao}`);
+
+    return res.json({
+      success: true,
+      icao: upperIcao,
+      count: cleanBays.length,
+      bays: cleanBays
+    });
+  } catch (err) {
+    console.error('Error saving terminals:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/taxi-route — Progressive Taxi Routing API ───────────────────────
 
 function normalizeIdent(str) {
-  if (!str) return '';
-  return str.toUpperCase().trim().replace(/^(RWY|RUNWAY|RW|TWY|TAXIWAY)\s*/i, '').replace(/^0+/, '');
+  if (!str) return "";
+  return str.toUpperCase().trim().replace(/^(RWY|RUNWAY|RW|TWY|TAXIWAY)\s*/i, "").replace(/^0+/, "");
+}
+
+function parseToken(s, idx, runwayIdents) {
+  let raw = s.toUpperCase().trim();
+  let clean = raw;
+  let type = "TWY";
+  let display = "TWY " + raw;
+
+  if (/^(RWY|RUNWAY|RW)/i.test(raw) || (idx === 0 && runwayIdents && runwayIdents.has(normalizeIdent(raw)))) {
+    type = "RWY";
+    clean = normalizeIdent(raw);
+    display = "RW" + (clean.length === 1 ? "0" + clean : clean);
+  } else if (/^(LANE|LN|TL|TAXILANE)/i.test(raw)) {
+    type = "LANE";
+    clean = raw.replace(/^(LANE|LN|TL|TAXILANE)\s*/i, "");
+    display = "LANE " + clean;
+  } else if (/^(GATE|GT|GTE)/i.test(raw)) {
+    type = "GATE";
+    clean = raw.replace(/^(GATE|GT|GTE)\s*/i, "");
+    display = "GATE " + clean;
+  } else if (/^(STAND|ST|STD|STN|STANCE)/i.test(raw)) {
+    type = "STAND";
+    clean = raw.replace(/^(STAND|ST|STD|STN|STANCE)\s*/i, "");
+    display = "STAND " + clean;
+  } else if (/^(TERM|TM|TERMINAL)/i.test(raw)) {
+    type = "TERM";
+    clean = raw.replace(/^(TERM|TM|TERMINAL)\s*/i, "");
+    display = "TERMINAL " + clean;
+  } else {
+    clean = normalizeIdent(raw);
+    display = "TWY " + clean;
+  }
+
+  return { raw, clean, type, display };
 }
 
 class TaxiwayGraph {
-  constructor(taxiways, runways) {
-    this.nodes = []; // [lat, lon]
-    this.adj = new Map(); // nodeId -> [ { to, ref, isRwy, weight, coords } ]
-    this.init(taxiways, runways);
+  constructor(taxiways, runways, gates = [], stands = [], bays = []) {
+    this.nodes = [];
+    this.adj = new Map();
+    this.bayNodeMap = new Map();     // ref -> bayNodeId
+    this.bayJunctionMap = new Map(); // ref -> taxilaneJunctionNodeId
+    this.runwayIdents = new Set();
+    (runways || []).forEach(r => {
+      if (r.le_ident) this.runwayIdents.add(normalizeIdent(r.le_ident));
+      if (r.he_ident) this.runwayIdents.add(normalizeIdent(r.he_ident));
+    });
+
+    const unifiedBays = bays && bays.length > 0 ? bays : mergeGatesAndStands(gates, stands);
+    this.init(taxiways, runways, unifiedBays);
   }
 
   addNode(lat, lon, mergeThresholdM = 4.0) {
@@ -967,8 +1398,7 @@ class TaxiwayGraph {
     this.adj.get(v).push({ to: u, ref, isRwy, weight, coords: [...coords].reverse() });
   }
 
-  init(taxiways, runways) {
-    // 1. Add taxiway segments
+  init(taxiways, runways, bays) {
     (taxiways || []).forEach(seg => {
       const ref = normalizeIdent(seg.ref);
       const coords = seg.coordinates || [];
@@ -980,7 +1410,6 @@ class TaxiwayGraph {
       }
     });
 
-    // 2. Add Runway centerline segments (subdivided into ~50m intervals for precise intersection branching)
     (runways || []).forEach(rwy => {
       const leRef = normalizeIdent(rwy.le_ident);
       const heRef = normalizeIdent(rwy.he_ident);
@@ -990,7 +1419,6 @@ class TaxiwayGraph {
 
       const totalLen = haversine(pLe[0], pLe[1], pHe[0], pHe[1]);
       const numSteps = Math.max(2, Math.ceil(totalLen / 50));
-      
       let prevNode = this.addNode(pLe[0], pLe[1], 10.0);
       for (let k = 1; k <= numSteps; k++) {
         const frac = k / numSteps;
@@ -998,32 +1426,111 @@ class TaxiwayGraph {
         const lon = pLe[1] + frac * (pHe[1] - pLe[1]);
         const currNode = this.addNode(lat, lon, 10.0);
         const w = haversine(this.nodes[prevNode][0], this.nodes[prevNode][1], lat, lon);
-        this.addEdge(prevNode, currNode, leRef, true, w, [this.nodes[prevNode], this.nodes[currNode]]);
-        this.addEdge(prevNode, currNode, heRef, true, w, [this.nodes[prevNode], this.nodes[currNode]]);
+        this.addEdge(prevNode, currNode, leRef, true, w, [this.nodes[prevNode], [lat, lon]]);
+        this.addEdge(prevNode, currNode, heRef, true, w, [this.nodes[prevNode], [lat, lon]]);
         prevNode = currNode;
       }
     });
 
-    // 3. Auto-bridge closely passing taxiway / runway nodes (crossings < 15m)
     for (let i = 0; i < this.nodes.length; i++) {
       for (let j = i + 1; j < this.nodes.length; j++) {
         const d = haversine(this.nodes[i][0], this.nodes[i][1], this.nodes[j][0], this.nodes[j][1]);
-        if (d > 0.1 && d <= 15.0) {
+        if (d > 0.1 && d <= 55.0) {
           const already = this.adj.get(i).some(e => e.to === j);
           if (!already) {
-            this.addEdge(i, j, 'CONNECTOR', false, d, [this.nodes[i], this.nodes[j]]);
+            this.addEdge(i, j, "CONNECTOR", false, d, [this.nodes[i], this.nodes[j]]);
           }
         }
       }
     }
+
+    // Capture count of genuine taxiway / taxilane nodes so bays only connect to taxilanes, NEVER to other bays!
+    const numTaxiwayNodes = this.nodes.length;
+
+    // Connect Bays directly to nearest taxilane / taxiway network node (or via custom traced lead_in_coords)
+    (bays || []).forEach(bay => {
+      if (!bay.lat || !bay.lon) return;
+      const bNode = this.addNode(bay.lat, bay.lon, 2.0);
+      const cleanRef = bay.ref.toUpperCase().trim();
+      this.bayNodeMap.set(cleanRef, bNode);
+
+      if (bay.lead_in_coords && Array.isArray(bay.lead_in_coords) && bay.lead_in_coords.length >= 2) {
+        // Automatically orient path from taxilane junction -> intermediate waypoints -> parking stop (bNode)
+        let orderedCoords = [...bay.lead_in_coords];
+        const dFirstToBay = haversine(orderedCoords[0][0], orderedCoords[0][1], bay.lat, bay.lon);
+        const dLastToBay = haversine(orderedCoords[orderedCoords.length - 1][0], orderedCoords[orderedCoords.length - 1][1], bay.lat, bay.lon);
+
+        if (dFirstToBay < dLastToBay) {
+          // Traced starting from parking spot out to taxiway -> reverse so index 0 is taxilane junction
+          orderedCoords.reverse();
+        }
+
+        let prevLeadNode = null;
+        for (let k = 0; k < orderedCoords.length; k++) {
+          const pt = orderedCoords[k];
+          const currLeadNode = (k === orderedCoords.length - 1) ? bNode : this.addNode(pt[0], pt[1], 2.0);
+          
+          if (k === 0) {
+            this.bayJunctionMap.set(cleanRef, currLeadNode);
+          }
+          if (prevLeadNode !== null) {
+            const w = haversine(this.nodes[prevLeadNode][0], this.nodes[prevLeadNode][1], this.nodes[currLeadNode][0], this.nodes[currLeadNode][1]);
+            this.addEdge(prevLeadNode, currLeadNode, "LEADIN_" + cleanRef, false, w, [this.nodes[prevLeadNode], this.nodes[currLeadNode]]);
+            this.addEdge(prevLeadNode, currLeadNode, "GATE_" + cleanRef, false, w, [this.nodes[prevLeadNode], this.nodes[currLeadNode]]);
+            this.addEdge(prevLeadNode, currLeadNode, "STAND_" + cleanRef, false, w, [this.nodes[prevLeadNode], this.nodes[currLeadNode]]);
+            this.addEdge(prevLeadNode, currLeadNode, cleanRef, false, w, [this.nodes[prevLeadNode], this.nodes[currLeadNode]]);
+          }
+          prevLeadNode = currLeadNode;
+        }
+
+        // Connect taxilane junction node of the lead-in line to the nearest taxilane node
+        const startLeadNode = this.bayJunctionMap.get(cleanRef);
+        let closestTaxiNode = null;
+        let minTaxiD = Infinity;
+        for (let i = 0; i < numTaxiwayNodes; i++) {
+          const d = haversine(this.nodes[startLeadNode][0], this.nodes[startLeadNode][1], this.nodes[i][0], this.nodes[i][1]);
+          if (d < minTaxiD && d < 75.0) {
+            minTaxiD = d;
+            closestTaxiNode = i;
+          }
+        }
+        if (closestTaxiNode !== null && closestTaxiNode !== startLeadNode) {
+          this.addEdge(startLeadNode, closestTaxiNode, "CONNECTOR", false, minTaxiD, [this.nodes[startLeadNode], this.nodes[closestTaxiNode]]);
+        }
+      } else {
+        // Connect directly to closest genuine taxilane node
+        let closestNode = null;
+        let minD = Infinity;
+        for (let i = 0; i < numTaxiwayNodes; i++) {
+          const d = haversine(bay.lat, bay.lon, this.nodes[i][0], this.nodes[i][1]);
+          if (d < minD && d < 250.0) {
+            minD = d;
+            closestNode = i;
+          }
+        }
+        if (closestNode !== null) {
+          this.bayJunctionMap.set(cleanRef, closestNode);
+          this.addEdge(bNode, closestNode, "LEADIN_" + cleanRef, false, minD, [this.nodes[bNode], this.nodes[closestNode]]);
+          this.addEdge(bNode, closestNode, "GATE_" + cleanRef, false, minD, [this.nodes[bNode], this.nodes[closestNode]]);
+          this.addEdge(bNode, closestNode, "STAND_" + cleanRef, false, minD, [this.nodes[bNode], this.nodes[closestNode]]);
+          this.addEdge(bNode, closestNode, cleanRef, false, minD, [this.nodes[bNode], this.nodes[closestNode]]);
+        }
+      }
+    });
   }
 
-  findNodesForRef(ref) {
-    const clean = normalizeIdent(ref);
+  findNodesForParsedToken(t) {
+    if (t.type === "GATE" || t.type === "STAND" || t.type === "BAY") {
+      const jNode = this.bayJunctionMap.get(t.clean);
+      if (jNode !== undefined) return [jNode];
+      const bNode = this.bayNodeMap.get(t.clean);
+      if (bNode !== undefined) return [bNode];
+    }
+
     const set = new Set();
     for (const [u, edges] of this.adj.entries()) {
       for (const e of edges) {
-        if (e.ref === clean) {
+        if (e.ref === t.clean) {
           set.add(u);
           set.add(e.to);
         }
@@ -1033,7 +1540,7 @@ class TaxiwayGraph {
   }
 
   findShortestPath(startNode, targetPredicate, preferredRef, refWeightMultiplier = 0.05) {
-    const cleanPref = normalizeIdent(preferredRef);
+    const cleanPref = preferredRef;
     const distMap = new Map();
     const prev = new Map();
     const pq = [{ node: startNode, cost: 0 }];
@@ -1044,7 +1551,6 @@ class TaxiwayGraph {
     while (pq.length > 0) {
       pq.sort((a, b) => a.cost - b.cost);
       const { node: curr, cost } = pq.shift();
-
       if (distMap.get(curr) < cost) continue;
 
       if (targetPredicate(curr, this.nodes[curr])) {
@@ -1053,8 +1559,8 @@ class TaxiwayGraph {
       }
 
       for (const edge of this.adj.get(curr)) {
-        const isMatch = cleanPref && edge.ref === cleanPref;
-        const multiplier = isMatch ? refWeightMultiplier : (edge.ref === 'CONNECTOR' ? 1.0 : 4.0);
+        const isMatch = cleanPref && (edge.ref === cleanPref || edge.ref.endsWith("_" + cleanPref));
+        const multiplier = isMatch ? refWeightMultiplier : (edge.ref === "CONNECTOR" ? 0.8 : 4.0);
         const edgeCost = edge.weight * multiplier;
         const newCost = cost + edgeCost;
 
@@ -1068,7 +1574,6 @@ class TaxiwayGraph {
 
     if (targetNode === null) return null;
 
-    // Reconstruct path
     const pathCoords = [this.nodes[targetNode]];
     let curr = targetNode;
     while (prev.has(curr)) {
@@ -1087,39 +1592,29 @@ class TaxiwayGraph {
     for (let k = 0; k < pathCoords.length - 1; k++) {
       trueDistM += haversine(pathCoords[k][0], pathCoords[k][1], pathCoords[k+1][0], pathCoords[k+1][1]);
     }
-
     return { targetNode, pathCoords, distM: trueDistM };
   }
 
-  routeSequential(tokens, closedRefs = new Set()) {
-    if (!tokens || tokens.length === 0) return null;
+  routeSequential(rawTokens, closedRefs = new Set()) {
+    if (!rawTokens || rawTokens.length === 0) return null;
 
-    const norm = tokens.map(t => {
-      let s = t.toUpperCase().trim();
-      let clean = normalizeIdent(s);
-      let isRwy = /^(RW|RUNWAY|RWY)/i.test(s) || /^[0-9]{1,2}[LCR]?$/.test(s);
-      let isClosed = closedRefs.has(clean) || closedRefs.has(s);
-      return { raw: s, clean, isRwy, isClosed };
+    const norm = rawTokens.map((t, idx) => {
+      const p = parseToken(t, idx, this.runwayIdents);
+      const isClosed = closedRefs.has(p.clean) || closedRefs.has(p.raw);
+      return { ...p, isClosed };
     });
 
     const legs = [];
     let currNode = null;
     let fullCoords = [];
 
-    const token0Nodes = this.findNodesForRef(norm[0].clean);
-    const token1Nodes = norm.length > 1 ? this.findNodesForRef(norm[1].clean) : [];
+    const token0Nodes = this.findNodesForParsedToken(norm[0]);
+    const token1Nodes = norm.length > 1 ? this.findNodesForParsedToken(norm[1]) : [];
 
     if (token0Nodes.length === 0) return null;
+    if (norm.length > 1 && token1Nodes.length === 0) return null;
 
-    if (norm.length === 1) {
-      // Single token
-      return null;
-    }
-
-    if (token1Nodes.length === 0) return null;
-
-    // If token 0 is a runway, start at the entry node closest to token 1
-    if (norm[0].isRwy) {
+    if (norm[0].type === "RWY") {
       let minD = Infinity;
       for (const u of token0Nodes) {
         for (const v of token1Nodes) {
@@ -1131,7 +1626,6 @@ class TaxiwayGraph {
         }
       }
     } else {
-      // Start at token 0 furthest node from token 1
       let bestStart = null;
       let maxDistTo1 = -1;
       for (const u of token0Nodes) {
@@ -1146,21 +1640,28 @@ class TaxiwayGraph {
 
     if (currNode === null) return null;
 
-    // Route each leg sequentially
-    for (let i = 1; i < norm.length; i++) {
-      const nextToken = norm[i];
-      const targetNodes = new Set(this.findNodesForRef(nextToken.clean));
-      const currentRef = norm[i-1].isRwy ? norm[i].clean : norm[i-1].clean;
-      
-      const res = this.findShortestPath(currNode, (nodeId) => targetNodes.has(nodeId), currentRef, 0.05);
+    const startIndex = norm[0].type === "RWY" ? 1 : 0;
+
+    for (let i = startIndex; i < norm.length - 1; i++) {
+      const currentToken = norm[i];
+      const nextToken = norm[i+1];
+      const targetNodes = new Set(this.findNodesForParsedToken(nextToken));
+
+      const res = this.findShortestPath(currNode, (nodeId) => targetNodes.has(nodeId), currentToken.clean, 0.05);
       if (!res) break;
 
+      const midIdx = Math.floor(res.pathCoords.length / 2);
       legs.push({
-        step: i,
-        token: nextToken.raw,
-        ref: nextToken.clean,
-        is_closed: nextToken.isClosed,
+        step: legs.length + 1,
+        token: currentToken.raw,
+        ref: currentToken.clean,
+        type: currentToken.type,
+        display: currentToken.display,
+        is_closed: currentToken.isClosed,
         coordinates: res.pathCoords,
+        start_point: res.pathCoords[0],
+        mid_point: res.pathCoords[midIdx],
+        end_point: res.pathCoords[res.pathCoords.length - 1],
         distance_m: Math.round(res.distM),
         distance_ft: Math.round(res.distM * 3.28084)
       });
@@ -1173,32 +1674,29 @@ class TaxiwayGraph {
       currNode = res.targetNode;
     }
 
-    // Traverse final token to its natural terminus along direction of travel
+    // Final leg from taxilane junction directly into the parking bay
     const lastNorm = norm[norm.length - 1];
-    if (!lastNorm.isRwy) {
-      const finalNodes = this.findNodesForRef(lastNorm.clean);
-      let furthestNode = null;
-      let maxD = 0;
-      for (const u of finalNodes) {
-        const d = haversine(this.nodes[currNode][0], this.nodes[currNode][1], this.nodes[u][0], this.nodes[u][1]);
-        if (d > maxD) {
-          maxD = d;
-          furthestNode = u;
-        }
-      }
-      if (furthestNode && furthestNode !== currNode) {
-        const finalRes = this.findShortestPath(currNode, (nodeId) => nodeId === furthestNode, lastNorm.clean, 0.05);
-        if (finalRes && finalRes.pathCoords.length > 1) {
+    if (lastNorm.type === "GATE" || lastNorm.type === "STAND") {
+      const bayTarget = this.bayNodeMap.get(lastNorm.clean);
+      if (bayTarget !== undefined && bayTarget !== currNode) {
+        const res = this.findShortestPath(currNode, (nodeId) => nodeId === bayTarget, "LEADIN_" + lastNorm.clean, 0.05);
+        if (res && res.pathCoords.length > 1) {
+          const midIdx = Math.floor(res.pathCoords.length / 2);
           legs.push({
-            step: norm.length,
-            token: lastNorm.raw + ' (Terminus)',
+            step: legs.length + 1,
+            token: lastNorm.raw,
             ref: lastNorm.clean,
+            type: lastNorm.type,
+            display: lastNorm.display,
             is_closed: lastNorm.isClosed,
-            coordinates: finalRes.pathCoords,
-            distance_m: Math.round(finalRes.distM),
-            distance_ft: Math.round(finalRes.distM * 3.28084)
+            coordinates: res.pathCoords,
+            start_point: res.pathCoords[0],
+            mid_point: res.pathCoords[midIdx],
+            end_point: res.pathCoords[res.pathCoords.length - 1],
+            distance_m: Math.round(res.distM),
+            distance_ft: Math.round(res.distM * 3.28084)
           });
-          fullCoords.push(...finalRes.pathCoords.slice(1));
+          fullCoords.push(...res.pathCoords.slice(1));
         }
       }
     }
@@ -1208,36 +1706,32 @@ class TaxiwayGraph {
       totalDistM += haversine(fullCoords[k][0], fullCoords[k][1], fullCoords[k+1][0], fullCoords[k+1][1]);
     }
 
-    const totalDistFt = Math.round(totalDistM * 3.28084);
-    const estTimeSec = totalDistM > 0 ? Math.round(totalDistM / 7.7) : 0;
-    const hasClosures = legs.some(l => l.is_closed);
-
     return {
-      has_closures: hasClosures,
-      total_distance_ft: totalDistFt,
+      has_closures: legs.some(l => l.is_closed),
+      total_distance_ft: Math.round(totalDistM * 3.28084),
       total_distance_m: Math.round(totalDistM),
-      est_time_sec: estTimeSec,
+      est_time_sec: totalDistM > 0 ? Math.round(totalDistM / 7.7) : 0,
       legs,
       path_coordinates: fullCoords
     };
   }
 }
 
-app.post('/api/taxi-route', async (req, res) => {
+app.post("/api/taxi-route", async (req, res) => {
   try {
     const { icao, route } = req.body;
     if (!icao || !route) {
-      return res.status(400).json({ error: 'icao and route are required' });
+      return res.status(400).json({ error: "icao and route are required" });
     }
 
     const upperIcao = icao.toUpperCase().trim();
     const apt = airportsDb[upperIcao];
     const taxiways = await getAirportTaxiways(upperIcao, apt?.latitude, apt?.longitude);
     const airportRunways = runwaysByIcao[upperIcao] || [];
+    const terminalData = await getAirportTerminals(upperIcao, apt?.latitude, apt?.longitude);
     const allSources = await fetchAllAirportSources(upperIcao);
-    const operational = resolveActiveOperational(allSources, 'real_world');
+    const operational = resolveActiveOperational(allSources, "real_world");
 
-    // Extract closed taxiway designators from NOTAMs
     const closedRefs = new Set();
     if (operational && operational.notams) {
       for (const n of operational.notams) {
@@ -1247,7 +1741,7 @@ app.post('/api/taxi-route', async (req, res) => {
             const parts = m[1].split(/\s+/);
             for (const p of parts) {
               const up = p.toUpperCase();
-              if (['CLOSED', 'CLSD', 'WEST', 'EAST', 'NORTH', 'SOUTH', 'OF', 'FOR', 'BETWEEN', 'AND'].includes(up)) break;
+              if (["CLOSED", "CLSD", "WEST", "EAST", "NORTH", "SOUTH", "OF", "FOR", "BETWEEN", "AND"].includes(up)) break;
               closedRefs.add(up);
             }
           }
@@ -1257,19 +1751,19 @@ app.post('/api/taxi-route', async (req, res) => {
 
     // Split route string by commas, spaces, dashes, or arrows
     const tokens = route
-      .split(/[,\s\->\+]+/g)
+      .split(/[\s,\->+]+/g)
       .map(t => t.trim().toUpperCase())
       .filter(Boolean);
 
     if (tokens.length === 0) {
-      return res.status(400).json({ error: 'No valid taxiway tokens found' });
+      return res.status(400).json({ error: "No valid taxiway tokens found" });
     }
 
-    const graph = new TaxiwayGraph(taxiways, airportRunways);
+    const graph = new TaxiwayGraph(taxiways, airportRunways, terminalData.gates, terminalData.stands, terminalData.bays);
     const routingResult = graph.routeSequential(tokens, closedRefs);
 
     if (!routingResult || routingResult.path_coordinates.length === 0) {
-      return res.status(404).json({ error: 'Could not find a continuous connected taxiway route for the given sequence.' });
+      return res.status(404).json({ error: "Could not find a continuous connected taxiway route for the given sequence." });
     }
 
     return res.json({
@@ -1280,7 +1774,7 @@ app.post('/api/taxi-route', async (req, res) => {
     });
 
   } catch (err) {
-    console.error('Taxi route error:', err);
+    console.error("Taxi route error:", err);
     res.status(500).json({ error: err.message });
   }
 });

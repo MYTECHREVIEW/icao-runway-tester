@@ -238,11 +238,98 @@
             <span style="font-size: 9.5px; font-weight: 400; color: var(--accent);">Sep by comma or space</span>
           </div>
           <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-            <input type="text" id="taxiRouteInput" placeholder="e.g. B, AA, P, RW04 or B AA P" spellcheck="false" style="flex: 1; padding: 7px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font-mono); font-size: 11.5px; outline: none;" />
+            <input type="text" id="taxiRouteInput" placeholder="e.g. RW04 G B L LN9 GT56 or RW04 G B 9 ST93" spellcheck="false" style="flex: 1; padding: 7px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font-mono); font-size: 11.5px; outline: none;" />
             <button id="btnGenerateTaxiRoute" style="background: var(--accent); color: var(--bg-base); border: none; border-radius: var(--radius-sm); padding: 0 12px; font-weight: 700; font-size: 11px; cursor: pointer; transition: opacity 0.15s;">Route</button>
             <button id="btnClearTaxiRoute" style="background: rgba(255,255,255,0.06); color: var(--text-muted); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0 8px; font-size: 11px; cursor: pointer;">✕</button>
           </div>
           <div id="taxiRouteSummary" class="hidden" style="background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 11px; display: flex; flex-direction: column; gap: 4px;">
+          </div>
+
+          <!-- Taxiway & Progressive Routing Legend -->
+          <div class="taxi-legend-card" style="margin-top: 10px; padding: 8px 10px; background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 11px;">
+            <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+              <span>📖 Clearance Abbreviations Legend</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 8px; font-family: var(--font-mono); font-size: 10.5px;">
+              <div style="display: flex; align-items: center; gap: 5px;">
+                <span style="color: #00d4ff; font-weight: 700;">RW / RWY</span>
+                <span style="color: var(--text-secondary); font-family: var(--font-sans); font-size: 10px;">Runway (e.g. <code>RW04</code>)</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 5px;">
+                <span style="color: #00ff88; font-weight: 700;">TWY / [Ref]</span>
+                <span style="color: var(--text-secondary); font-family: var(--font-sans); font-size: 10px;">Taxiway (e.g. <code>G, B, L</code>)</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 5px;">
+                <span style="color: #38bdf8; font-weight: 700;">LN / LANE</span>
+                <span style="color: var(--text-secondary); font-family: var(--font-sans); font-size: 10px;">Ramp Lane (e.g. <code>LN9</code>)</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 5px;">
+                <span style="color: #c084fc; font-weight: 700;">GT / GATE</span>
+                <span style="color: var(--text-secondary); font-family: var(--font-sans); font-size: 10px;">Gate (e.g. <code>GT56, GATE69</code>)</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 5px;">
+                <span style="color: #facc15; font-weight: 700;">ST / STAND</span>
+                <span style="color: var(--text-secondary); font-family: var(--font-sans); font-size: 10px;">Stand (e.g. <code>ST93, STAND4</code>)</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 5px;">
+                <span style="color: #f472b6; font-weight: 700;">TM / TERM</span>
+                <span style="color: var(--text-secondary); font-family: var(--font-sans); font-size: 10px;">Terminal (e.g. <code>TMB</code>)</span>
+              </div>
+            </div>
+            <div style="margin-top: 6px; padding-top: 5px; border-top: 1px dashed rgba(255,255,255,0.1); font-size: 10px; color: var(--text-muted);">
+              💡 <em>Example:</em> <span style="font-family: var(--font-mono); color: var(--accent);">RW04 G B L LN9 GT56</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9. Gates & Stands Overlay -->
+    <div class="panel" id="terminalPanel">
+      <div class="panel-header">
+        <span class="panel-icon">🚪</span>
+        <span class="panel-title">Gates &amp; Stands Overlay</span>
+      </div>
+      <div class="panel-body">
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <span class="toggle-icon">🚪</span>
+            <div>
+              <div class="toggle-title">Airport Gates &amp; Stands</div>
+              <div class="toggle-desc">Boarding gates &amp; parking stances</div>
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="terminalToggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- Sub-filters and Counts -->
+        <div id="terminalSubControls" class="hidden" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+          <div style="display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;">
+            <button id="btnToggleGates" class="layer-pill active" style="font-size: 10.5px; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: rgba(168, 85, 247, 0.15); color: #c084fc; cursor: pointer; font-weight: 700;">
+              🚪 Gates (<span id="gateCount">0</span>)
+            </button>
+            <button id="btnToggleStands" class="layer-pill active" style="font-size: 10.5px; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: rgba(234, 179, 8, 0.15); color: #facc15; cursor: pointer; font-weight: 700;">
+              🅿️ Stands (<span id="standCount">0</span>)
+            </button>
+          </div>
+
+          <!-- Gate / Stand Quick Locator -->
+          <div style="display: flex; gap: 6px;">
+            <input type="text" id="gateSearchInput" placeholder="Locate Gate/Stand (e.g. 69, B12, 93)..." spellcheck="false" style="flex: 1; padding: 6px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; outline: none;" />
+            <button id="btnLocateGate" style="background: var(--accent); color: var(--bg-base); border: none; border-radius: var(--radius-sm); padding: 0 10px; font-weight: 700; font-size: 10.5px; cursor: pointer;">Locate</button>
+          </div>
+          <div id="gateSearchFeedback" class="hidden" style="margin-top: 4px; font-size: 10.5px; color: var(--green); font-family: var(--font-mono);"></div>
+
+          <!-- Prominent Visual Editor Button in Panel 9 -->
+          <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+            <button id="btnToggleEditMode" class="btn-editor-toggle" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 12px; background: rgba(56, 189, 248, 0.15); border: 1.5px solid #38bdf8; border-radius: var(--radius-sm); color: #38bdf8; font-size: 11.5px; font-weight: 800; cursor: pointer; transition: all 0.2s ease;">
+              <span>✏️</span>
+              <span id="btnEditModeText">Visual Editor Mode</span>
+            </button>
+            <div style="font-size: 10px; color: var(--text-muted); text-align: center; margin-top: 4px;">Drag markers &amp; trace lead-in paths directly on satellite map</div>
           </div>
         </div>
       </div>
@@ -263,8 +350,118 @@
   <div class="search-bar">
     <input type="text" id="airportSearch" placeholder="Go to airport… (e.g. KLGA, KJFK, EGLL)" spellcheck="false" />
     <button id="searchBtn">Go</button>
+    <button id="btnQuickEdit" style="background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #38bdf8; border-radius: var(--radius-sm); padding: 0 10px; font-size: 11px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 5px; height: 32px;" title="Open Visual Editor to drag spots and trace paths">
+      <span>✏️</span> Edit Map
+    </button>
   </div>
 
   <script src="app.js"></script>
+
+  <!-- Floating Visual Editor Toolbar -->
+  <div id="floatingEditorBar" class="floating-editor-bar hidden">
+    <div class="editor-bar-header">
+      <div class="editor-status-badge">
+        <span class="pulse-dot"></span>
+        <span>VISUAL MAP EDITOR</span>
+      </div>
+
+      <!-- Quick Spot Selector Dropdown -->
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label style="font-size: 11px; color: var(--text-secondary); font-weight: 700;">Select Spot:</label>
+        <select id="editorBaySelect" class="editor-select" onchange="window.selectBayForEditing(this.value)">
+          <option value="">-- Choose Gate/Stand --</option>
+        </select>
+      </div>
+
+      <button id="editorBtnExit" class="editor-btn action-exit" title="Exit visual editor" onclick="window.toggleVisualEditorMode(false)">
+        <span>✕ Exit</span>
+      </button>
+    </div>
+
+    <!-- Active Selected Bay Editor Row -->
+    <div id="editorActiveBayRow" class="editor-edit-row">
+      <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Number:</span>
+        <input type="text" id="editorRefInput" class="editor-input" placeholder="e.g. 52" style="width: 75px;" />
+        
+        <select id="editorTypeSelect" class="editor-select" style="width: 100px;">
+          <option value="gate">🚪 Gate</option>
+          <option value="stand">🅿️ Stand</option>
+        </select>
+
+        <button id="editorBtnApplyEdit" class="editor-btn action-apply" title="Apply number & type changes" onclick="window.applyBayEdits()">
+          <span>✔️</span> Update
+        </button>
+
+        <div class="editor-divider"></div>
+
+        <button id="editorBtnTraceLeadIn" class="editor-btn action-trace" title="Click waypoints from gate to taxiway" onclick="window.handleTraceButtonClick()">
+          <span>✏️</span> <span id="traceBtnText">Trace Lead-In</span>
+        </button>
+
+        <button id="editorBtnClearLeadIn" class="editor-btn action-clear" title="Reset custom lead-in line" onclick="window.clearLeadInPath()">
+          <span>🔄</span> Reset Path
+        </button>
+
+        <button id="editorBtnDeleteBay" class="editor-btn action-delete" title="Delete selected spot" onclick="window.deleteSelectedBay()">
+          <span>🗑️</span> Delete
+        </button>
+      </div>
+    </div>
+
+    <!-- Toolbar Primary Actions -->
+    <div class="editor-actions" style="justify-content: space-between; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 8px;">
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <button id="editorBtnToggleAddForm" class="editor-btn action-add" title="Open add new gate/stand form" onclick="window.toggleAddSpotPanel()">
+          <span>➕</span> Add New Spot
+        </button>
+        <span id="editorInfoLabel" style="font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono);"></span>
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button id="editorBtnSave" class="editor-btn action-save" title="Save all airport changes permanently to database" onclick="window.saveEditorChanges(false)">
+          <span id="saveBtnIcon">💾</span> <span id="saveBtnText">Save Changes to DB</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Inline Add New Spot Panel -->
+    <div id="editorAddPanel" class="editor-add-panel hidden">
+      <div style="font-size: 11px; font-weight: 800; color: #38bdf8; margin-bottom: 6px;">➕ Create New Aircraft Parking Spot:</div>
+      <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+        <input type="text" id="newSpotRefInput" class="editor-input" placeholder="Spot Number (e.g. 48B, 99)..." style="width: 170px;" />
+        <select id="newSpotTypeSelect" class="editor-select" style="width: 110px;">
+          <option value="gate">🚪 Jetbridge Gate</option>
+          <option value="stand">🅿️ Remote Stand</option>
+        </select>
+        <button id="btnConfirmAddSpot" class="editor-btn action-apply" style="background: #0284c7; color: #fff;" onclick="window.confirmAddNewSpot()">
+          <span>📍</span> Drop at Center
+        </button>
+        <button id="btnCancelAddSpot" class="editor-btn action-exit" onclick="window.toggleAddSpotPanel(false)">Cancel</button>
+      </div>
+    </div>
+  </div>
+<!-- Instruction Banner while Tracing -->
+  <div id="tracingInstructionBanner" class="tracing-banner hidden">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="font-size: 22px;">✏️</span>
+      <div>
+        <div style="font-size: 12px; font-weight: 800; color: #facc15;">
+          Tracing Path for <span id="tracingBayRef" style="color: #ffffff; text-decoration: underline;">--</span>
+          <span id="tracingWaypointCount" style="font-size: 11px; color: #38bdf8; margin-left: 8px;">(1 start point)</span>
+        </div>
+        <div style="font-size: 11px; color: #cbd5e1; margin-top: 2px;">
+          Click points along the yellow curve from the <strong>parking stop</strong> out to the <strong>taxiway/taxilane</strong>.
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button id="btnFinishTracing" class="tracing-btn-done" onclick="window.finishTracingLeadIn()">✅ Done Tracing</button>
+      <button id="btnCancelTracing" class="tracing-btn-cancel" onclick="window.cancelTracingLeadIn()">✕ Cancel</button>
+    </div>
+  </div>
+<!-- Toast Notification -->
+  <div id="editorToast" class="editor-toast hidden"></div>
+
 </body>
 </html>

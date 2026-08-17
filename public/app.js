@@ -60,11 +60,31 @@ const TILES = {
 
 const taxiwayLayerGroup = L.layerGroup();
 const taxiRouteLayerGroup = L.layerGroup();
+const terminalLayerGroup = L.layerGroup();
+const gateLayerGroup = L.layerGroup();
+const standLayerGroup = L.layerGroup();
+const editorLayerGroup = L.layerGroup();
+
+// Visual Editor State
+let isEditMode = false;
+let selectedBayRef = null;
+let isTracingLeadIn = false;
+let currentTraceCoords = [];
+let traceLineLayer = null;
+let traceDotLayers = [];
+let hasUnsavedChanges = false;
+
+const SHOW_TERMINALS_KEY = 'icao_show_terminals_v1';
+let showTerminals = localStorage.getItem(SHOW_TERMINALS_KEY) !== 'false';
+let showTerminalBuildings = true;
+let showGates = true;
+let showStands = true;
+
 
 const map = L.map('map', {
   center: [40.777, -73.872],  // Default: KLGA
   zoom: 16,
-  layers: showTaxiways ? [fallbackGoogle, taxiwayLayerGroup, taxiRouteLayerGroup] : [fallbackGoogle, taxiRouteLayerGroup],
+  layers: [fallbackGoogle, taxiRouteLayerGroup, editorLayerGroup, ...(showTaxiways ? [taxiwayLayerGroup] : []), ...(showTerminals ? [terminalLayerGroup, gateLayerGroup, standLayerGroup] : [])],
   zoomControl: true
 });
 
@@ -75,7 +95,10 @@ let layerControl = L.control.layers({
   '🛰 Esri World Imagery': TILES.esri,
   '🌑 Dark Map (No Labels)': TILES.dark
 }, {
-  '🚖 Taxiway Network': taxiwayLayerGroup
+  '🚖 Taxiway Network': taxiwayLayerGroup,
+  '🏢 Terminals & Gates': terminalLayerGroup,
+  '🚪 Boarding Gates': gateLayerGroup,
+  '🅿️ Parking Stands': standLayerGroup
 }, { position: 'bottomright' }).addTo(map);
 
 // ── Fetch Server Config & Apply High-Precision Mapbox Tiles ───────────────────
@@ -167,6 +190,9 @@ function clearRunwayLayers() {
   runwayLayers = [];
   taxiwayLayerGroup.clearLayers();
   taxiRouteLayerGroup.clearLayers();
+  terminalLayerGroup.clearLayers();
+  gateLayerGroup.clearLayers();
+  standLayerGroup.clearLayers();
   if (devLineLayer) {
     map.removeLayer(devLineLayer);
     devLineLayer = null;
@@ -448,6 +474,9 @@ function drawRunways(data) {
     drawTaxiways(data.taxiways);
     renderTaxiwaySelector(data.taxiways);
   }
+
+  // Draw Terminals, Gates & Stands Layer
+  drawAirportTerminals(data);
 }
 
 // ── Taxiway Sidebar Selector & Reset ──────────────────────────────────────────
@@ -1072,6 +1101,800 @@ async function analyzePoint(lat, lon) {
 }
 
 
+
+// ── Draw Terminals, Gates & Stands ──────────────────────────────────────────
+
+function calculateBearing(lat1, lon1, lat2, lon2) {
+  const RAD = Math.PI / 180;
+  const phi1 = lat1 * RAD, phi2 = lat2 * RAD;
+  const dLon = (lon2 - lon1) * RAD;
+  const y = Math.sin(dLon) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function mergeGatesAndStandsClient(gates = [], stands = []) {
+  const bays = [];
+  const usedStands = new Set();
+  const usedRefs = new Map();
+
+  (gates || []).forEach(g => {
+    if (!g.lat || !g.lon || !g.ref) return;
+    const cleanRef = String(g.ref).toUpperCase().trim();
+
+    let match = (stands || []).find(s => s.ref && String(s.ref).toUpperCase().trim() === cleanRef && !usedStands.has(s.id));
+    if (!match) {
+      match = (stands || []).find(s => {
+        if (!s.ref || usedStands.has(s.id) || !s.lat || !s.lon) return false;
+        const sRef = String(s.ref).toUpperCase().trim();
+        const sameBase = sRef.replace(/[A-Z]/g, "") === cleanRef.replace(/[A-Z]/g, "");
+        if (!sameBase) return false;
+        const d = haversine(g.lat, g.lon, s.lat, s.lon);
+        return d <= 120.0;
+      });
+    }
+
+    if (match) {
+      usedStands.add(match.id);
+      const heading = calculateBearing(match.lat, match.lon, g.lat, g.lon);
+      bays.push({
+        id: "bay_" + cleanRef,
+        ref: cleanRef,
+        name: `Gate ${cleanRef}`,
+        type: "gate",
+        has_jetbridge: true,
+        lat: match.lat,
+        lon: match.lon,
+        jetbridge_lat: g.lat,
+        jetbridge_lon: g.lon,
+        heading: Math.round(heading),
+        max_wingspan_m: match.max_wingspan_m || null
+      });
+      usedRefs.set(cleanRef, true);
+    } else {
+      bays.push({
+        id: "bay_" + cleanRef,
+        ref: cleanRef,
+        name: `Gate ${cleanRef}`,
+        type: "gate",
+        has_jetbridge: true,
+        lat: g.lat,
+        lon: g.lon,
+        jetbridge_lat: g.lat,
+        jetbridge_lon: g.lon,
+        heading: 0,
+        max_wingspan_m: null
+      });
+      usedRefs.set(cleanRef, true);
+    }
+  });
+
+  (stands || []).forEach(s => {
+    if (!s.lat || !s.lon || !s.ref || usedStands.has(s.id)) return;
+    const cleanRef = String(s.ref).toUpperCase().trim();
+    if (usedRefs.has(cleanRef)) return;
+
+    bays.push({
+      id: "bay_" + cleanRef,
+      ref: cleanRef,
+      name: `Stand ${cleanRef}`,
+      type: "stand",
+      has_jetbridge: false,
+      lat: s.lat,
+      lon: s.lon,
+      jetbridge_lat: null,
+      jetbridge_lon: null,
+      heading: 0,
+      max_wingspan_m: s.max_wingspan_m || null
+    });
+    usedRefs.set(cleanRef, true);
+  });
+
+  return bays;
+}
+
+function isValidAviationRef(ref) {
+  if (!ref) return false;
+  const s = String(ref).trim();
+  if (!s || s === 'null' || s === 'undefined') return false;
+  if (/^[0-9]{5,}$/.test(s)) return false;
+  return true;
+}
+
+async function drawAirportTerminals(data) {
+  terminalLayerGroup.clearLayers();
+  gateLayerGroup.clearLayers();
+  standLayerGroup.clearLayers();
+  editorLayerGroup.clearLayers();
+
+  if (!data) data = lastResult;
+  if (!data) return;
+
+  // If bays/gates/stands are not yet present in data, fetch from /api/terminals
+  if ((!data.bays || data.bays.length === 0) && (!data.gates || data.gates.length === 0) && (!data.stands || data.stands.length === 0)) {
+    const icao = data.airport?.icao || data.active_runway?.airport_icao;
+    if (icao) {
+      try {
+        const res = await fetch('/api/terminals?icao=' + encodeURIComponent(icao));
+        const tData = await res.json();
+        if (tData) {
+          data.terminals = tData.terminals || [];
+          data.gates = (tData.gates || []).filter(g => isValidAviationRef(g.ref));
+          data.stands = (tData.stands || []).filter(s => isValidAviationRef(s.ref));
+          data.bays = tData.bays || mergeGatesAndStandsClient(data.gates, data.stands);
+        }
+      } catch (e) {
+        console.warn('Could not load bays for ' + icao, e);
+      }
+    }
+  }
+
+  const cleanGates = (data.gates || []).filter(g => isValidAviationRef(g.ref));
+  const cleanStands = (data.stands || []).filter(s => isValidAviationRef(s.ref));
+  const bays = data.bays && data.bays.length > 0 ? data.bays.filter(b => isValidAviationRef(b.ref)) : mergeGatesAndStandsClient(cleanGates, cleanStands);
+  data.bays = bays;
+
+  const gateBays = bays.filter(b => b.has_jetbridge);
+  const standBays = bays.filter(b => !b.has_jetbridge);
+
+  // Update counts in sidebar
+  const gateCountEl = document.getElementById('gateCount');
+  const standCountEl = document.getElementById('standCount');
+  if (gateCountEl) gateCountEl.textContent = gateBays.length;
+  if (standCountEl) standCountEl.textContent = standBays.length;
+
+  // Populate editor dropdown
+  populateEditorBayDropdown(bays);
+
+  if (!showTerminals && !isEditMode) return;
+
+  if (!map.hasLayer(gateLayerGroup)) map.addLayer(gateLayerGroup);
+  if (!map.hasLayer(standLayerGroup)) map.addLayer(standLayerGroup);
+  if (!map.hasLayer(editorLayerGroup)) map.addLayer(editorLayerGroup);
+
+  // Draw Unified Aircraft Parking Bays
+  bays.forEach(bay => {
+    if (!bay.lat || !bay.lon || !isValidAviationRef(bay.ref)) return;
+
+    const isGate = bay.has_jetbridge;
+    if (!isEditMode) {
+      if (isGate && !showGates) return;
+      if (!isGate && !showStands) return;
+    }
+
+    const targetLayer = isGate ? gateLayerGroup : standLayerGroup;
+    const isSelected = isEditMode && selectedBayRef === bay.ref;
+
+    // 1. Draw Custom Traced Lead-In Line with Draggable Handles in Edit Mode
+    if (bay.lead_in_coords && Array.isArray(bay.lead_in_coords) && bay.lead_in_coords.length >= 2) {
+      const customLine = L.polyline(bay.lead_in_coords, {
+        color: isSelected ? '#fde047' : '#eab308',
+        weight: isSelected ? 4.5 : 3.0,
+        opacity: 0.95,
+        interactive: false
+      });
+      targetLayer.addLayer(customLine);
+
+      // Render Draggable Interactive Waypoint Handles in Edit Mode
+      if (isEditMode && isSelected && !isTracingLeadIn) {
+        bay.lead_in_coords.forEach((pt, pIdx) => {
+          const isStart = (pIdx === 0);
+          const isEnd = (pIdx === bay.lead_in_coords.length - 1);
+          
+          const handleMarker = L.marker(pt, {
+            draggable: true,
+            icon: L.divIcon({
+              className: 'lead-in-handle-wrapper',
+              html: `<div class="lead-in-handle ${isStart ? 'handle-start' : (isEnd ? 'handle-end' : 'handle-mid')}" title="${isStart ? 'Parking Stop' : (isEnd ? 'Taxilane Junction' : 'Waypoint ' + pIdx)}"></div>`,
+              iconSize: [14, 14],
+              iconAnchor: [7, 7]
+            })
+          });
+
+          handleMarker.on('drag', (e) => {
+            const newCoord = [e.target.getLatLng().lat, e.target.getLatLng().lng];
+            bay.lead_in_coords[pIdx] = newCoord;
+            if (isStart) {
+              bay.lat = newCoord[0];
+              bay.lon = newCoord[1];
+              tBar.setLatLng([newCoord[0], newCoord[1]]);
+            }
+            customLine.setLatLngs(bay.lead_in_coords);
+            updateEditorToolbar();
+          });
+
+          handleMarker.on('dragend', (e) => {
+            const newCoord = [e.target.getLatLng().lat, e.target.getLatLng().lng];
+            bay.lead_in_coords[pIdx] = newCoord;
+            if (isStart) {
+              bay.lat = newCoord[0];
+              bay.lon = newCoord[1];
+            }
+            hasUnsavedChanges = true;
+            showEditorToast(`📍 Adjusted ${isStart ? 'Start' : (isEnd ? 'Taxilane End' : 'Waypoint ' + pIdx)} of ${bay.ref}`);
+            saveEditorChanges(true);
+            drawAirportTerminals(lastResult);
+          });
+
+          editorLayerGroup.addLayer(handleMarker);
+        });
+      }
+    }
+
+    // 2. Aircraft Parking Stop Line (T-bar / stop box)
+    const tBar = L.circleMarker([bay.lat, bay.lon], {
+      radius: isSelected ? 7 : 4.5,
+      color: isSelected ? '#facc15' : (isGate ? '#c084fc' : '#eab308'),
+      fillColor: isSelected ? '#f59e0b' : (isGate ? '#7c3aed' : '#ca8a04'),
+      fillOpacity: 0.95,
+      weight: isSelected ? 2.5 : 1.8,
+      interactive: false
+    });
+    targetLayer.addLayer(tBar);
+
+    // 3. Single Unified Clean Number Badge
+    const badgeHtml = `<div class="bay-badge ${isGate ? 'gate' : 'stand'} ${isEditMode ? 'editing' : ''} ${isSelected ? 'selected' : ''}" onclick="window.selectBayFromBadge('${bay.ref}', event)" id="bay-marker-${bay.ref}">${bay.ref}</div>`;
+
+    const badgeMarker = L.marker([bay.lat, bay.lon], {
+      draggable: isEditMode && !isTracingLeadIn,
+      icon: L.divIcon({
+        className: 'bay-icon-wrapper',
+        html: badgeHtml,
+        iconSize: null,
+        iconAnchor: [10, 8]
+      })
+    });
+
+    if (isEditMode) {
+      badgeMarker.on('drag', (e) => {
+        const newPos = e.target.getLatLng();
+        bay.lat = newPos.lat;
+        bay.lon = newPos.lng;
+        tBar.setLatLng([newPos.lat, newPos.lng]);
+        updateEditorToolbar();
+      });
+
+      badgeMarker.on('dragend', (e) => {
+        const newPos = e.target.getLatLng();
+        bay.lat = newPos.lat;
+        bay.lon = newPos.lng;
+        hasUnsavedChanges = true;
+        showEditorToast(`📍 Moved Spot ${bay.ref} to ${bay.lat.toFixed(6)}, ${bay.lon.toFixed(6)}`);
+        saveEditorChanges(true);
+      });
+    }
+
+    targetLayer.addLayer(badgeMarker);
+  });
+
+  updateEditorToolbar();
+}
+
+window.selectBayFromBadge = function(ref, e) {
+  if (e) e.stopPropagation();
+  selectBayForEditing(ref);
+};
+
+// ── Visual Editor Functions ──────────────────────────────────────────────────
+
+function toggleVisualEditorMode(forceState) {
+  isEditMode = (forceState !== undefined) ? forceState : !isEditMode;
+  
+  const btnToggle = document.getElementById('btnToggleEditMode');
+  const btnText = document.getElementById('btnEditModeText');
+  const btnQuick = document.getElementById('btnQuickEdit');
+  const bar = document.getElementById('floatingEditorBar');
+
+  if (isEditMode) {
+    if (btnToggle) btnToggle.classList.add('active');
+    if (btnText) btnText.textContent = 'Exit Editor Mode';
+    if (btnQuick) {
+      btnQuick.style.background = '#0284c7';
+      btnQuick.style.color = '#ffffff';
+    }
+    if (bar) bar.classList.remove('hidden');
+
+    if (!showTerminals) {
+      showTerminals = true;
+      const termToggle = document.getElementById('terminalToggle');
+      if (termToggle) termToggle.checked = true;
+    }
+
+    if (!selectedBayRef && lastResult && lastResult.bays && lastResult.bays.length > 0) {
+      selectedBayRef = lastResult.bays[0].ref;
+    }
+
+    showEditorToast('✏️ Visual Editor Active: Drag badges or click "Trace Lead-In" to draw paths.');
+  } else {
+    if (btnToggle) btnToggle.classList.remove('active');
+    if (btnText) btnText.textContent = 'Visual Editor Mode';
+    if (btnQuick) {
+      btnQuick.style.background = 'rgba(56, 189, 248, 0.25)';
+      btnQuick.style.color = '#38bdf8';
+    }
+    if (bar) bar.classList.add('hidden');
+    cancelTracingLeadIn();
+    const addPanel = document.getElementById('editorAddPanel');
+    if (addPanel) addPanel.classList.add('hidden');
+    showEditorToast('Visual Editor Closed');
+  }
+
+  drawAirportTerminals(lastResult);
+}
+window.toggleVisualEditorMode = toggleVisualEditorMode;
+
+function populateEditorBayDropdown(bays) {
+  const selectEl = document.getElementById('editorBaySelect');
+  if (!selectEl) return;
+
+  const currentVal = selectedBayRef || selectEl.value;
+  selectEl.innerHTML = '<option value="">-- Choose Gate/Stand --</option>';
+
+  (bays || []).forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b.ref;
+    opt.textContent = `${b.has_jetbridge ? '🚪 Gate' : '🅿️ Stand'} ${b.ref}`;
+    if (b.ref === currentVal) opt.selected = true;
+    selectEl.appendChild(opt);
+  });
+}
+
+function selectBayForEditing(ref) {
+  if (!ref) return;
+  selectedBayRef = ref;
+
+  const selectEl = document.getElementById('editorBaySelect');
+  if (selectEl) selectEl.value = ref;
+
+  if (lastResult && lastResult.bays) {
+    const bay = lastResult.bays.find(b => b.ref === ref);
+    if (bay) {
+      const refInput = document.getElementById('editorRefInput');
+      const typeSelect = document.getElementById('editorTypeSelect');
+      if (refInput) refInput.value = bay.ref;
+      if (typeSelect) typeSelect.value = bay.type || (bay.has_jetbridge ? 'gate' : 'stand');
+    }
+  }
+
+  drawAirportTerminals(lastResult);
+}
+window.selectBayForEditing = selectBayForEditing;
+
+function applyBayEdits() {
+  if (!selectedBayRef || !lastResult || !lastResult.bays) return;
+  const bay = lastResult.bays.find(b => b.ref === selectedBayRef);
+  if (!bay) return;
+
+  const refInput = document.getElementById('editorRefInput');
+  const typeSelect = document.getElementById('editorTypeSelect');
+  if (!refInput || !typeSelect) return;
+
+  const newRef = refInput.value.trim().toUpperCase();
+  if (!newRef) {
+    alert('Spot number cannot be empty.');
+    return;
+  }
+
+  const oldRef = bay.ref;
+  const newType = typeSelect.value;
+  const isGate = newType === 'gate';
+
+  bay.ref = newRef;
+  bay.type = newType;
+  bay.has_jetbridge = isGate;
+  bay.name = (isGate ? 'Gate ' : 'Stand ') + newRef;
+
+  selectedBayRef = newRef;
+  hasUnsavedChanges = true;
+  showEditorToast(`✔️ Updated Spot ${oldRef} -> ${newRef} (${isGate ? 'Gate' : 'Stand'})`);
+  saveEditorChanges(true);
+  drawAirportTerminals(lastResult);
+}
+window.applyBayEdits = applyBayEdits;
+
+function updateEditorToolbar() {
+  const bar = document.getElementById('floatingEditorBar');
+  if (!bar || !isEditMode) return;
+
+  const infoEl = document.getElementById('editorInfoLabel');
+  const refInput = document.getElementById('editorRefInput');
+  const typeSelect = document.getElementById('editorTypeSelect');
+  const btnClear = document.getElementById('editorBtnClearLeadIn');
+
+  if (!lastResult || !lastResult.bays || !selectedBayRef) {
+    if (infoEl) infoEl.textContent = 'Click any gate badge on map or choose from dropdown';
+    return;
+  }
+
+  const bay = lastResult.bays.find(b => b.ref === selectedBayRef);
+  if (!bay) {
+    if (infoEl) infoEl.textContent = 'Click any gate badge on map or choose from dropdown';
+    return;
+  }
+
+  if (refInput && document.activeElement !== refInput) refInput.value = bay.ref;
+  if (typeSelect && document.activeElement !== typeSelect) typeSelect.value = bay.type || (bay.has_jetbridge ? 'gate' : 'stand');
+
+  const hasLeadIn = bay.lead_in_coords && bay.lead_in_coords.length >= 2;
+  if (infoEl) {
+    infoEl.innerHTML = `Pos: ${bay.lat.toFixed(5)}, ${bay.lon.toFixed(5)} ${hasLeadIn ? '<span style="color:#facc15; font-weight:800;">[Custom Line: ' + bay.lead_in_coords.length + ' pts]</span>' : '<span style="color:#94a3b8;">[Direct Taxilane Connector]</span>'}`;
+  }
+
+  if (btnClear) {
+    if (hasLeadIn) btnClear.classList.remove('disabled');
+    else btnClear.classList.add('disabled');
+  }
+}
+
+// ── Lead-In Tracer ────────────────────────────────────────────────────────────
+
+let rubberBandLine = null;
+
+function handleTraceButtonClick() {
+  if (isTracingLeadIn) {
+    finishTracingLeadIn();
+  } else {
+    startTracingLeadIn();
+  }
+}
+window.handleTraceButtonClick = handleTraceButtonClick;
+
+function startTracingLeadIn() {
+  if (!lastResult || !lastResult.bays) {
+    showEditorToast('⚠️ Load an airport first before tracing.');
+    return;
+  }
+
+  if (!selectedBayRef && lastResult.bays.length > 0) {
+    selectedBayRef = lastResult.bays[0].ref;
+  }
+
+  const bay = lastResult.bays.find(b => b.ref === selectedBayRef);
+  if (!bay) {
+    showEditorToast('⚠️ Please select a gate or stand first.');
+    return;
+  }
+
+  cancelTracingLeadIn(); // clear any previous listeners
+
+  isTracingLeadIn = true;
+  // Start line directly at the selected bay parking spot!
+  currentTraceCoords = [[bay.lat, bay.lon]];
+  
+  const mapContainer = document.getElementById('map');
+  if (mapContainer) mapContainer.classList.add('crosshair-cursor');
+
+  const banner = document.getElementById('tracingInstructionBanner');
+  const refSpan = document.getElementById('tracingBayRef');
+  const countSpan = document.getElementById('tracingWaypointCount');
+  if (banner) banner.classList.remove('hidden');
+  if (refSpan) refSpan.textContent = bay.name || bay.ref;
+  if (countSpan) countSpan.textContent = '(1 start point at ' + bay.ref + ')';
+
+  const btnTrace = document.getElementById('editorBtnTraceLeadIn');
+  const traceText = document.getElementById('traceBtnText');
+  if (btnTrace) btnTrace.classList.add('active');
+  if (traceText) traceText.textContent = 'Finish Trace';
+
+  map.doubleClickZoom.disable();
+
+  // Initial waypoint dot at the bay position
+  const startDot = L.circleMarker([bay.lat, bay.lon], {
+    radius: 6,
+    color: '#10b981',
+    fillColor: '#34d399',
+    fillOpacity: 1,
+    weight: 2,
+    interactive: false
+  });
+  editorLayerGroup.addLayer(startDot);
+  traceDotLayers.push(startDot);
+
+  // Hook Leaflet map click and mousemove directly
+  map.on('click', handleTraceMapClick);
+  map.on('mousemove', handleTraceMapMove);
+
+  showEditorToast(`🎯 Tracing mode active for ${bay.ref}: Click along the yellow line to the taxiway.`);
+}
+window.startTracingLeadIn = startTracingLeadIn;
+
+function handleTraceMapClick(e) {
+  if (!isTracingLeadIn) return;
+  const pt = [e.latlng.lat, e.latlng.lng];
+  currentTraceCoords.push(pt);
+
+  const countSpan = document.getElementById('tracingWaypointCount');
+  if (countSpan) countSpan.textContent = `(${currentTraceCoords.length} points added)`;
+
+  // Render solid live polyline
+  if (traceLineLayer) editorLayerGroup.removeLayer(traceLineLayer);
+  traceLineLayer = L.polyline(currentTraceCoords, {
+    color: '#facc15',
+    weight: 4,
+    opacity: 1,
+    interactive: false
+  });
+  editorLayerGroup.addLayer(traceLineLayer);
+
+  const dot = L.circleMarker(pt, {
+    radius: 5,
+    color: '#facc15',
+    fillColor: '#ffffff',
+    fillOpacity: 1,
+    weight: 2,
+    interactive: false
+  });
+  editorLayerGroup.addLayer(dot);
+  traceDotLayers.push(dot);
+}
+
+function handleTraceMapMove(e) {
+  if (!isTracingLeadIn || currentTraceCoords.length === 0) return;
+  const lastPt = currentTraceCoords[currentTraceCoords.length - 1];
+  
+  if (rubberBandLine) editorLayerGroup.removeLayer(rubberBandLine);
+  rubberBandLine = L.polyline([lastPt, [e.latlng.lat, e.latlng.lng]], {
+    color: '#fde047',
+    weight: 3,
+    dashArray: '5, 5',
+    opacity: 0.85,
+    interactive: false
+  });
+  editorLayerGroup.addLayer(rubberBandLine);
+}
+
+function finishTracingLeadIn() {
+  if (!isTracingLeadIn || !selectedBayRef || !lastResult || !lastResult.bays) return;
+  const bay = lastResult.bays.find(b => b.ref === selectedBayRef);
+  if (!bay) return;
+
+  if (currentTraceCoords.length >= 2) {
+    bay.lead_in_coords = currentTraceCoords;
+    hasUnsavedChanges = true;
+    showEditorToast(`✅ Saved line with ${currentTraceCoords.length} points for ${bay.ref}!`);
+    saveEditorChanges(false);
+  } else {
+    showEditorToast('⚠️ Tracing requires at least 2 points. Click on the map to add points.');
+  }
+
+  cancelTracingLeadIn();
+  drawAirportTerminals(lastResult);
+}
+window.finishTracingLeadIn = finishTracingLeadIn;
+
+function cancelTracingLeadIn() {
+  isTracingLeadIn = false;
+  currentTraceCoords = [];
+  if (traceLineLayer) editorLayerGroup.removeLayer(traceLineLayer);
+  if (rubberBandLine) editorLayerGroup.removeLayer(rubberBandLine);
+  traceDotLayers.forEach(d => editorLayerGroup.removeLayer(d));
+  traceDotLayers = [];
+  traceLineLayer = null;
+  rubberBandLine = null;
+
+  const mapContainer = document.getElementById('map');
+  if (mapContainer) mapContainer.classList.remove('crosshair-cursor');
+
+  const banner = document.getElementById('tracingInstructionBanner');
+  if (banner) banner.classList.add('hidden');
+
+  const btnTrace = document.getElementById('editorBtnTraceLeadIn');
+  const traceText = document.getElementById('traceBtnText');
+  if (btnTrace) btnTrace.classList.remove('active');
+  if (traceText) traceText.textContent = 'Trace Lead-In';
+
+  map.off('click', handleTraceMapClick);
+  map.off('mousemove', handleTraceMapMove);
+  map.doubleClickZoom.enable();
+}
+window.cancelTracingLeadIn = cancelTracingLeadIn;
+
+function clearLeadInPath() {
+  if (!selectedBayRef || !lastResult || !lastResult.bays) return;
+  const bay = lastResult.bays.find(b => b.ref === selectedBayRef);
+  if (!bay) return;
+
+  bay.lead_in_coords = null;
+  hasUnsavedChanges = true;
+  showEditorToast(`🔄 Reset lead-in path for ${bay.ref} to direct taxilane connector.`);
+  saveEditorChanges(true);
+  drawAirportTerminals(lastResult);
+}
+window.clearLeadInPath = clearLeadInPath;
+
+function toggleAddSpotPanel(forceState) {
+  const panel = document.getElementById('editorAddPanel');
+  if (!panel) return;
+  if (forceState !== undefined) {
+    panel.classList.toggle('hidden', !forceState);
+  } else {
+    panel.classList.toggle('hidden');
+  }
+  if (!panel.classList.contains('hidden')) {
+    const input = document.getElementById('newSpotRefInput');
+    if (input) input.focus();
+  }
+}
+window.toggleAddSpotPanel = toggleAddSpotPanel;
+
+function confirmAddNewSpot() {
+  if (!lastResult) {
+    showEditorToast('⚠️ Load or click an airport first before adding spots.');
+    return;
+  }
+  const input = document.getElementById('newSpotRefInput');
+  const typeSelect = document.getElementById('newSpotTypeSelect');
+  if (!input) return;
+
+  const ref = input.value.trim().toUpperCase();
+  if (!ref) {
+    alert('Please enter a gate or stand number (e.g. 48B).');
+    return;
+  }
+
+  const isGate = typeSelect ? typeSelect.value === 'gate' : true;
+  const center = map.getCenter();
+
+  if (!lastResult.bays) lastResult.bays = [];
+  lastResult.bays = lastResult.bays.filter(b => b.ref !== ref);
+
+  const newBay = {
+    id: 'bay_' + ref,
+    ref: ref,
+    name: (isGate ? 'Gate ' : 'Stand ') + ref,
+    type: isGate ? 'gate' : 'stand',
+    has_jetbridge: isGate,
+    lat: center.lat,
+    lon: center.lng,
+    jetbridge_lat: isGate ? center.lat : null,
+    jetbridge_lon: isGate ? center.lng : null,
+    heading: 0,
+    max_wingspan_m: null,
+    lead_in_coords: null
+  };
+
+  lastResult.bays.push(newBay);
+  selectedBayRef = ref;
+  hasUnsavedChanges = true;
+  input.value = '';
+  toggleAddSpotPanel(false);
+
+  saveEditorChanges(true);
+  drawAirportTerminals(lastResult);
+  showEditorToast(`➕ Created ${newBay.name} at map center. Drag marker to correct parking spot.`);
+}
+window.confirmAddNewSpot = confirmAddNewSpot;
+
+function deleteSelectedBay() {
+  if (!selectedBayRef || !lastResult || !lastResult.bays) return;
+  const ref = selectedBayRef;
+  if (!confirm(`Are you sure you want to delete ${ref} from this airport?`)) return;
+
+  lastResult.bays = lastResult.bays.filter(b => b.ref !== ref);
+  selectedBayRef = lastResult.bays.length > 0 ? lastResult.bays[0].ref : null;
+  hasUnsavedChanges = true;
+  saveEditorChanges(true);
+  drawAirportTerminals(lastResult);
+  showEditorToast(`🗑️ Deleted ${ref} from airport layout.`);
+}
+window.deleteSelectedBay = deleteSelectedBay;
+
+async function saveEditorChanges(isSilent = false) {
+  // Normalize if passed a MouseEvent object from DOM listener
+  if (isSilent && typeof isSilent === 'object') {
+    isSilent = false;
+  }
+
+  if (!lastResult || !lastResult.bays) return;
+  const icao = lastResult.airport?.icao || lastResult.active_runway?.airport_icao || currentIcao || 'KLGA';
+
+  const saveBtn = document.getElementById('editorBtnSave');
+  const saveIcon = document.getElementById('saveBtnIcon');
+  const saveText = document.getElementById('saveBtnText');
+
+  try {
+    const res = await fetch('/api/terminals/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        icao: icao,
+        bays: lastResult.bays
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      hasUnsavedChanges = false;
+      
+      // Visual button feedback
+      if (saveBtn) {
+        saveBtn.style.background = '#059669';
+        if (saveIcon) saveIcon.textContent = '✅';
+        if (saveText) saveText.textContent = 'Saved to Database!';
+        setTimeout(() => {
+          saveBtn.style.background = '';
+          if (saveIcon) saveIcon.textContent = '💾';
+          if (saveText) saveText.textContent = 'Save Changes to DB';
+        }, 2200);
+      }
+
+      if (!isSilent) {
+        showEditorToast(`💾 Saved ${data.count} parking positions & lead-in lines for ${icao} to database!`);
+      }
+    } else {
+      if (!isSilent) alert('Failed to save to database: ' + (data.error || 'Unknown error'));
+    }
+  } catch (err) {
+    if (!isSilent) alert('Error saving to server: ' + err.message);
+  }
+}
+window.saveEditorChanges = saveEditorChanges;
+
+function showEditorToast(msg) {
+  const toast = document.getElementById('editorToast');
+  if (!toast) return;
+  toast.textContent = msg;
+  toast.classList.remove('hidden');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => {
+    toast.classList.add('hidden');
+  }, 3500);
+}
+window.showEditorToast = showEditorToast;
+
+window.setTaxiDestination = function(gateOrStandRef) {
+  const inputEl = document.getElementById('taxiRouteInput');
+  if (inputEl) {
+    let curr = inputEl.value.trim();
+    if (curr) {
+      if (!curr.endsWith(gateOrStandRef)) {
+        inputEl.value = curr + ' ' + gateOrStandRef;
+      }
+    } else {
+      inputEl.value = gateOrStandRef;
+    }
+    inputEl.focus();
+  }
+};
+
+function locateGateOrStand(query) {
+  if (!query || !query.trim() || !lastResult) return;
+  const q = query.trim().toUpperCase().replace(/^(GATE|STAND|TWY|RWY)\\s*/i, '');
+  const feedbackEl = document.getElementById('gateSearchFeedback');
+
+  const gates = lastResult.gates || [];
+  const stands = lastResult.stands || [];
+
+  const foundGate = gates.find(g => g.ref.toUpperCase() === q || g.name.toUpperCase().includes(q));
+  const foundStand = !foundGate ? stands.find(s => s.ref.toUpperCase() === q || s.name.toUpperCase().includes(q)) : null;
+
+  const target = foundGate || foundStand;
+  if (target) {
+    // Ensure layer is turned on
+    if (!showTerminals) {
+      const toggleEl = document.getElementById('terminalToggle');
+      if (toggleEl) {
+        toggleEl.checked = true;
+        toggleEl.dispatchEvent(new Event('change'));
+      }
+    }
+
+    map.flyTo([target.lat, target.lon], 18, { duration: 1.0 });
+
+    if (feedbackEl) {
+      feedbackEl.textContent = `📍 Found ${foundGate ? 'Gate' : 'Stand'} ${target.ref} at ${target.lat.toFixed(4)}, ${target.lon.toFixed(4)}`;
+      feedbackEl.style.color = 'var(--green)';
+      feedbackEl.classList.remove('hidden');
+    }
+  } else {
+    if (feedbackEl) {
+      feedbackEl.textContent = `⚠️ No Gate/Stand matching "${query}" found at this airport.`;
+      feedbackEl.style.color = '#ff4757';
+      feedbackEl.classList.remove('hidden');
+    }
+  }
+}
+
 // ── Progressive Taxi Route Generator ──────────────────────────────────────────
 
 let activeTaxiRoute = null;
@@ -1149,33 +1972,49 @@ function renderTaxiRoute(data) {
   });
   taxiRouteLayerGroup.addLayer(routeCore);
 
-  // 3. Render sequential step badges at the start of each leg
+  // 3. Render sequential step badges and mid-path labels along each leg
   legs.forEach((leg, idx) => {
     if (!leg.coordinates || leg.coordinates.length === 0) return;
 
     const isClosed = leg.is_closed;
-    const [lat, lon] = leg.coordinates[0];
+    const startPt = leg.start_point || leg.coordinates[0];
+    const midPt = leg.mid_point || leg.coordinates[Math.floor(leg.coordinates.length / 2)];
     const badgeText = leg.token.includes("RW") ? leg.token : "TWY " + leg.ref;
 
-    const badgeHtml = isClosed
+    // Step junction badge at start of this leg
+    const stepBadgeHtml = isClosed
       ? `<div class="twy-map-badge closed" style="border:2px solid #fff;box-shadow:0 0 16px rgba(255,71,87,1);">⛔ ${leg.step}. ${badgeText} [CLSD]</div>`
       : `<div class="twy-map-badge" style="background:#00ff88;color:#0a0d14;border:2px solid #fff;font-weight:900;box-shadow:0 0 14px rgba(0,255,136,0.9);">${leg.step}. ${badgeText}</div>`;
 
-    const stepMarker = L.marker([lat, lon], {
+    const stepMarker = L.marker(startPt, {
       icon: L.divIcon({
         className: "aviation-sign-icon",
-        html: badgeHtml,
+        html: stepBadgeHtml,
         iconSize: null,
         iconAnchor: [0, 0]
       })
     });
     taxiRouteLayerGroup.addLayer(stepMarker);
+
+    // Midpoint label along taxiway pavement (if leg is long enough)
+    if (leg.distance_m > 30 && midPt) {
+      const midLabelHtml = `<div class="twy-map-badge" style="background:rgba(10,13,20,0.85);color:#00ff88;border:1px solid #00ff88;font-size:10px;padding:1px 5px;box-shadow:0 2px 6px rgba(0,0,0,0.6);">TWY ${leg.ref}</div>`;
+      const midMarker = L.marker(midPt, {
+        icon: L.divIcon({
+          className: "aviation-sign-icon",
+          html: midLabelHtml,
+          iconSize: null,
+          iconAnchor: [0, 0]
+        })
+      });
+      taxiRouteLayerGroup.addLayer(midMarker);
+    }
   });
 
   // 4. Render Terminus / Destination Marker at the very end of the route
-  const lastPoint = path_coordinates[path_coordinates.length - 1];
   const lastLeg = legs[legs.length - 1];
-  const endBadgeHtml = `<div class="rwy-map-badge" style="background:#00d4ff;color:#0a0d14;border:2px solid #fff;font-weight:900;box-shadow:0 0 16px rgba(0,212,255,0.9);">🏁 ROUTE TERMINUS (${lastLeg?.ref || "END"})</div>`;
+  const lastPoint = lastLeg?.end_point || path_coordinates[path_coordinates.length - 1];
+  const endBadgeHtml = `<div class="rwy-map-badge" style="background:#00d4ff;color:#0a0d14;border:2px solid #fff;font-weight:900;box-shadow:0 0 16px rgba(0,212,255,0.9);">🏁 DESTINATION (TWY ${lastLeg?.ref || "END"})</div>`;
   const endMarker = L.marker(lastPoint, {
     icon: L.divIcon({
       className: "aviation-sign-icon",
@@ -1247,6 +2086,160 @@ function initControls() {
     });
   });
 
+  // ── Terminals & Gates Toggle
+  const termToggle = document.getElementById('terminalToggle');
+  const termSubControls = document.getElementById('terminalSubControls');
+  if (termToggle) {
+    termToggle.checked = showTerminals;
+    if (showTerminals && termSubControls) termSubControls.classList.remove('hidden');
+
+    termToggle.addEventListener('change', async (e) => {
+      showTerminals = e.target.checked;
+      localStorage.setItem(SHOW_TERMINALS_KEY, showTerminals ? 'true' : 'false');
+      if (showTerminals) {
+        if (termSubControls) termSubControls.classList.remove('hidden');
+        if (!map.hasLayer(gateLayerGroup)) map.addLayer(gateLayerGroup);
+        if (!map.hasLayer(standLayerGroup)) map.addLayer(standLayerGroup);
+        if (lastResult) {
+          await drawAirportTerminals(lastResult);
+        } else {
+          const center = map.getCenter();
+          await analyzePoint(center.lat, center.lng);
+        }
+      } else {
+        if (termSubControls) termSubControls.classList.add('hidden');
+        map.removeLayer(gateLayerGroup);
+        map.removeLayer(standLayerGroup);
+      }
+    });
+  }
+
+  const btnBuildings = document.getElementById('btnToggleTerminalBuildings');
+  if (btnBuildings) {
+    btnBuildings.addEventListener('click', () => {
+      showTerminalBuildings = !showTerminalBuildings;
+      btnBuildings.classList.toggle('inactive', !showTerminalBuildings);
+      if (lastResult) drawAirportTerminals(lastResult);
+    });
+  }
+
+  const btnGates = document.getElementById('btnToggleGates');
+  if (btnGates) {
+    btnGates.addEventListener('click', () => {
+      showGates = !showGates;
+      btnGates.classList.toggle('inactive', !showGates);
+      if (lastResult) drawAirportTerminals(lastResult);
+    });
+  }
+
+  const btnStands = document.getElementById('btnToggleStands');
+  if (btnStands) {
+    btnStands.addEventListener('click', () => {
+      showStands = !showStands;
+      btnStands.classList.toggle('inactive', !showStands);
+      if (lastResult) drawAirportTerminals(lastResult);
+    });
+  }
+
+  const btnLocate = document.getElementById('btnLocateGate');
+  const gateInput = document.getElementById('gateSearchInput');
+  if (btnLocate && gateInput) {
+    btnLocate.addEventListener('click', () => locateGateOrStand(gateInput.value));
+    gateInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') locateGateOrStand(gateInput.value);
+    });
+  }
+
+  // ── Visual Editor Controls
+  const btnToggleEdit = document.getElementById('btnToggleEditMode');
+  if (btnToggleEdit) {
+    btnToggleEdit.addEventListener('click', () => toggleVisualEditorMode());
+  }
+
+  const btnQuickEdit = document.getElementById('btnQuickEdit');
+  if (btnQuickEdit) {
+    btnQuickEdit.addEventListener('click', () => toggleVisualEditorMode());
+  }
+
+  const baySelect = document.getElementById('editorBaySelect');
+  if (baySelect) {
+    baySelect.addEventListener('change', (e) => {
+      selectBayForEditing(e.target.value);
+    });
+  }
+
+  const btnApplyEdit = document.getElementById('editorBtnApplyEdit');
+  if (btnApplyEdit) {
+    btnApplyEdit.addEventListener('click', applyBayEdits);
+  }
+
+  const refInput = document.getElementById('editorRefInput');
+  if (refInput) {
+    refInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') applyBayEdits();
+    });
+  }
+
+  const editorTraceBtn = document.getElementById('editorBtnTraceLeadIn');
+  if (editorTraceBtn) {
+    editorTraceBtn.addEventListener('click', () => {
+      if (isTracingLeadIn) finishTracingLeadIn();
+      else startTracingLeadIn();
+    });
+  }
+
+  const editorFinishBtn = document.getElementById('btnFinishTracing');
+  if (editorFinishBtn) {
+    editorFinishBtn.addEventListener('click', finishTracingLeadIn);
+  }
+
+  const editorCancelBtn = document.getElementById('btnCancelTracing');
+  if (editorCancelBtn) {
+    editorCancelBtn.addEventListener('click', cancelTracingLeadIn);
+  }
+
+  const editorClearBtn = document.getElementById('editorBtnClearLeadIn');
+  if (editorClearBtn) {
+    editorClearBtn.addEventListener('click', clearLeadInPath);
+  }
+
+  const btnToggleAdd = document.getElementById('editorBtnToggleAddForm');
+  if (btnToggleAdd) {
+    btnToggleAdd.addEventListener('click', () => toggleAddSpotPanel());
+  }
+
+  const btnConfirmAdd = document.getElementById('btnConfirmAddSpot');
+  if (btnConfirmAdd) {
+    btnConfirmAdd.addEventListener('click', confirmAddNewSpot);
+  }
+
+  const newRefInput = document.getElementById('newSpotRefInput');
+  if (newRefInput) {
+    newRefInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') confirmAddNewSpot();
+    });
+  }
+
+  const btnCancelAdd = document.getElementById('btnCancelAddSpot');
+  if (btnCancelAdd) {
+    btnCancelAdd.addEventListener('click', () => toggleAddSpotPanel(false));
+  }
+
+  const editorDeleteBtn = document.getElementById('editorBtnDeleteBay');
+  if (editorDeleteBtn) {
+    editorDeleteBtn.addEventListener('click', deleteSelectedBay);
+  }
+
+  const editorSaveBtn = document.getElementById('editorBtnSave');
+  if (editorSaveBtn) {
+    editorSaveBtn.addEventListener('click', saveEditorChanges);
+  }
+
+  const editorExitBtn = document.getElementById('editorBtnExit');
+  if (editorExitBtn) {
+    editorExitBtn.addEventListener('click', () => toggleVisualEditorMode(false));
+  }
+
   const twyToggle = document.getElementById('taxiwayToggle');
   if (twyToggle) {
     twyToggle.checked = showTaxiways;
@@ -1269,6 +2262,15 @@ function initControls() {
 // ── Map Click ─────────────────────────────────────────────────────────────────
 
 map.on('click', (e) => {
+  // If currently tracing lead-in path or in edit mode, DO NOT trigger analyzePoint!
+  if (isTracingLeadIn) {
+    handleTraceMapClick(e);
+    return;
+  }
+  if (isEditMode) {
+    return;
+  }
+
   const { lat, lng } = e.latlng;
 
   if (pinMarker) {
@@ -1302,9 +2304,12 @@ async function goToAirport(query) {
     const results = await resp.json();
     if (results && results[0]) {
       const { lat, lon } = results[0];
+      const pLat = parseFloat(lat);
+      const pLon = parseFloat(lon);
       selectedRunwayKey = null;
       selectedTaxiwayRef = null;
-      map.flyTo([parseFloat(lat), parseFloat(lon)], 16, { duration: 1.5 });
+      map.flyTo([pLat, pLon], 16, { duration: 1.5 });
+      analyzePoint(pLat, pLon);
       return;
     }
   } catch (e) { /* fallback */ }
@@ -1341,4 +2346,8 @@ document.getElementById('airportSearch').addEventListener('keydown', (e) => {
 
 initControls();
 showLoading(false);
+
+// Auto-analyze default airport on startup
+analyzePoint(40.777, -73.872);
+
 console.log('🛬 ICAO Runway Analyzer ready with Taxiway and Runway Isolation.');
