@@ -204,6 +204,7 @@ function resetTaxiwaySelection() {
 function drawTaxiways(taxiways) {
   if (!taxiways || !Array.isArray(taxiways)) return;
   taxiwayLayerGroup.clearLayers();
+  if (activeTaxiRoute) return; // Hide standard taxiways when progressive route is active to avoid clutter
 
   // If a specific taxiway is selected, ISOLATE it: only draw segments of that taxiway!
   let segmentsToDraw = taxiways;
@@ -1079,134 +1080,136 @@ async function generateTaxiRoute(routeStr) {
   if (!routeStr || !routeStr.trim()) return;
   const icao = lastResult?.airport?.icao || (lastResult?.active_runway?.airport_icao);
   if (!icao) {
-    alert('Please click on an airport on the map or search an airport first!');
+    alert("Please click on an airport on the map or search an airport first!");
     return;
   }
 
   try {
-    const res = await fetch('/api/taxi-route', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("/api/taxi-route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ icao, route: routeStr })
     });
     const data = await res.json();
     if (data.error) {
-      alert('Taxi Route Error: ' + data.error);
+      alert("Taxi Route: " + data.error);
       return;
     }
 
     activeTaxiRoute = data;
     renderTaxiRoute(data);
   } catch (err) {
-    console.error('Taxi routing failed:', err);
+    console.error("Taxi routing failed:", err);
   }
 }
 
 function clearTaxiRoute() {
   activeTaxiRoute = null;
   taxiRouteLayerGroup.clearLayers();
-  const summaryEl = document.getElementById('taxiRouteSummary');
+  const summaryEl = document.getElementById("taxiRouteSummary");
   if (summaryEl) {
-    summaryEl.innerHTML = '';
-    summaryEl.classList.add('hidden');
+    summaryEl.innerHTML = "";
+    summaryEl.classList.add("hidden");
   }
-  const inputEl = document.getElementById('taxiRouteInput');
-  if (inputEl) inputEl.value = '';
+  const inputEl = document.getElementById("taxiRouteInput");
+  if (inputEl) inputEl.value = "";
+
+  // Restore normal taxiways
+  if (showTaxiways && lastResult?.taxiways) {
+    drawTaxiways(lastResult.taxiways);
+  }
 }
 
 function renderTaxiRoute(data) {
   taxiRouteLayerGroup.clearLayers();
 
-  // Ensure taxiways are visible
-  if (!showTaxiways) {
-    showTaxiways = true;
-    localStorage.setItem(SHOW_TAXIWAYS_KEY, 'true');
-    const toggleEl = document.getElementById('taxiwayToggle');
-    if (toggleEl) toggleEl.checked = true;
-    if (!map.hasLayer(taxiwayLayerGroup)) map.addLayer(taxiwayLayerGroup);
-    if (lastResult?.taxiways) drawTaxiways(lastResult.taxiways);
-  }
+  // Hide all other background taxiways to avoid clutter and confusion
+  taxiwayLayerGroup.clearLayers();
 
-  const { legs, total_distance_ft, total_distance_m, est_time_sec, has_closures } = data;
+  const { legs, path_coordinates, total_distance_ft, total_distance_m, est_time_sec, has_closures } = data;
+  if (!path_coordinates || path_coordinates.length < 2) return;
 
-  // Render each leg with glowing clearance casing and sequential step numbers
+  // 1. Draw continuous background route glow
+  const routeGlow = L.polyline(path_coordinates, {
+    color: has_closures ? "#ff4757" : "#00d4ff",
+    weight: 9,
+    opacity: 0.4,
+    lineCap: "round",
+    lineJoin: "round"
+  });
+  taxiRouteLayerGroup.addLayer(routeGlow);
+
+  // 2. Draw continuous core route path
+  const routeCore = L.polyline(path_coordinates, {
+    color: has_closures ? "#ff4757" : "#00ff88",
+    weight: 4.5,
+    opacity: 1,
+    lineCap: "round",
+    lineJoin: "round"
+  });
+  taxiRouteLayerGroup.addLayer(routeCore);
+
+  // 3. Render sequential step badges at the start of each leg
   legs.forEach((leg, idx) => {
-    if (!leg.coordinates || leg.coordinates.length < 2) return;
+    if (!leg.coordinates || leg.coordinates.length === 0) return;
 
     const isClosed = leg.is_closed;
-    const glowColor = isClosed ? '#ff4757' : '#00d4ff';
-    const coreColor = isClosed ? '#ff4757' : '#00ff88';
+    const [lat, lon] = leg.coordinates[0];
+    const badgeText = leg.token.includes("RW") ? leg.token : "TWY " + leg.ref;
 
-    // Outer glow casing
-    const glowLine = L.polyline(leg.coordinates, {
-      color: glowColor,
-      weight: 8,
-      opacity: 0.45,
-      lineCap: 'round',
-      lineJoin: 'round'
-    });
-    taxiRouteLayerGroup.addLayer(glowLine);
-
-    // Inner core progressive line
-    const coreLine = L.polyline(leg.coordinates, {
-      color: coreColor,
-      weight: 4,
-      opacity: 1,
-      dashArray: isClosed ? '6,6' : null,
-      lineCap: 'round',
-      lineJoin: 'round'
-    });
-    taxiRouteLayerGroup.addLayer(coreLine);
-
-    // Step waypoint badge at start of leg
-    const [startLat, startLon] = leg.coordinates[0];
     const badgeHtml = isClosed
-      ? `<div class="twy-map-badge closed" style="border:2px solid #fff;box-shadow:0 0 16px rgba(255,71,87,1);">⛔ ${leg.step}. TWY ${leg.ref} [CLSD]</div>`
-      : `<div class="twy-map-badge" style="background:#00ff88;color:#0a0d14;border:2px solid #fff;font-weight:900;box-shadow:0 0 14px rgba(0,255,136,0.9);">${leg.step}. TWY ${leg.ref}</div>`;
+      ? `<div class="twy-map-badge closed" style="border:2px solid #fff;box-shadow:0 0 16px rgba(255,71,87,1);">⛔ ${leg.step}. ${badgeText} [CLSD]</div>`
+      : `<div class="twy-map-badge" style="background:#00ff88;color:#0a0d14;border:2px solid #fff;font-weight:900;box-shadow:0 0 14px rgba(0,255,136,0.9);">${leg.step}. ${badgeText}</div>`;
 
-    const stepMarker = L.marker([startLat, startLon], {
+    const stepMarker = L.marker([lat, lon], {
       icon: L.divIcon({
-        className: 'aviation-sign-icon',
+        className: "aviation-sign-icon",
         html: badgeHtml,
         iconSize: null,
         iconAnchor: [0, 0]
       })
     });
     taxiRouteLayerGroup.addLayer(stepMarker);
-
-    // If final leg, add Finish Hold-Short flag
-    if (idx === legs.length - 1) {
-      const [endLat, endLon] = leg.coordinates[leg.coordinates.length - 1];
-      const endMarker = L.marker([endLat, endLon], {
-        icon: L.divIcon({
-          className: 'aviation-sign-icon',
-          html: `<div class="rwy-map-badge" style="background:#00d4ff;color:#0a0d14;border:2px solid #fff;font-weight:900;">🏁 HOLD SHORT ${leg.ref}</div>`,
-          iconSize: null,
-          iconAnchor: [0, 0]
-        })
-      });
-      taxiRouteLayerGroup.addLayer(endMarker);
-    }
   });
 
-  // Update Sidebar Summary
-  const summaryEl = document.getElementById('taxiRouteSummary');
+  // 4. Render Terminus / Destination Marker at the very end of the route
+  const lastPoint = path_coordinates[path_coordinates.length - 1];
+  const lastLeg = legs[legs.length - 1];
+  const endBadgeHtml = `<div class="rwy-map-badge" style="background:#00d4ff;color:#0a0d14;border:2px solid #fff;font-weight:900;box-shadow:0 0 16px rgba(0,212,255,0.9);">🏁 ROUTE TERMINUS (${lastLeg?.ref || "END"})</div>`;
+  const endMarker = L.marker(lastPoint, {
+    icon: L.divIcon({
+      className: "aviation-sign-icon",
+      html: endBadgeHtml,
+      iconSize: null,
+      iconAnchor: [0, 0]
+    })
+  });
+  taxiRouteLayerGroup.addLayer(endMarker);
+
+  // Auto-fit bounds smoothly to view the entire clearance path
+  try {
+    const bounds = L.latLngBounds(path_coordinates);
+    map.flyToBounds(bounds, { padding: [60, 60], maxZoom: 17, duration: 0.8 });
+  } catch (e) {}
+
+  // 5. Update Sidebar Summary
+  const summaryEl = document.getElementById("taxiRouteSummary");
   if (summaryEl) {
-    summaryEl.classList.remove('hidden');
+    summaryEl.classList.remove("hidden");
 
     const estMin = (est_time_sec / 60).toFixed(1);
     const closureNotice = has_closures
       ? `<div style="color:#ff4757;font-weight:700;font-size:10px;margin-top:2px;">⚠️ WARNING: Route crosses NOTAM closed taxiway!</div>`
-      : '';
+      : "";
 
     const breadcrumbs = legs.map(l => {
-      const col = l.is_closed ? '#ff4757' : 'var(--accent)';
+      const col = l.is_closed ? "#ff4757" : "var(--accent)";
       return `<span style="color:${col};font-weight:700;font-family:var(--font-mono);">[${l.ref}]</span>`;
-    }).join(' ➔ ');
+    }).join(" ➔ ");
 
     summaryEl.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">Taxi Clearance Path</span>
+        <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">Active Taxi Clearance</span>
         <span style="font-family:var(--font-mono);font-size:10.5px;color:var(--green);font-weight:700;">${fmt(total_distance_ft)} ft / ${fmt(total_distance_m)} m</span>
       </div>
       <div style="font-size:10.5px;color:var(--text-secondary);display:flex;justify-content:space-between;">

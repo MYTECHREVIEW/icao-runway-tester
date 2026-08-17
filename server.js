@@ -936,6 +936,293 @@ app.post('/api/analyze', async (req, res) => {
 
 
 // ── POST /api/taxi-route — Progressive Taxi Routing API ───────────────────────
+
+function normalizeIdent(str) {
+  if (!str) return '';
+  return str.toUpperCase().trim().replace(/^(RWY|RUNWAY|RW|TWY|TAXIWAY)\s*/i, '').replace(/^0+/, '');
+}
+
+class TaxiwayGraph {
+  constructor(taxiways, runways) {
+    this.nodes = []; // [lat, lon]
+    this.adj = new Map(); // nodeId -> [ { to, ref, isRwy, weight, coords } ]
+    this.init(taxiways, runways);
+  }
+
+  addNode(lat, lon, mergeThresholdM = 4.0) {
+    for (let i = 0; i < this.nodes.length; i++) {
+      if (haversine(lat, lon, this.nodes[i][0], this.nodes[i][1]) <= mergeThresholdM) {
+        return i;
+      }
+    }
+    const id = this.nodes.length;
+    this.nodes.push([lat, lon]);
+    this.adj.set(id, []);
+    return id;
+  }
+
+  addEdge(u, v, ref, isRwy, weight, coords) {
+    if (u === v) return;
+    this.adj.get(u).push({ to: v, ref, isRwy, weight, coords });
+    this.adj.get(v).push({ to: u, ref, isRwy, weight, coords: [...coords].reverse() });
+  }
+
+  init(taxiways, runways) {
+    // 1. Add taxiway segments
+    (taxiways || []).forEach(seg => {
+      const ref = normalizeIdent(seg.ref);
+      const coords = seg.coordinates || [];
+      for (let i = 0; i < coords.length - 1; i++) {
+        const u = this.addNode(coords[i][0], coords[i][1]);
+        const v = this.addNode(coords[i+1][0], coords[i+1][1]);
+        const w = haversine(coords[i][0], coords[i][1], coords[i+1][0], coords[i+1][1]);
+        this.addEdge(u, v, ref, false, w, [coords[i], coords[i+1]]);
+      }
+    });
+
+    // 2. Add Runway centerline segments (subdivided into ~50m intervals for precise intersection branching)
+    (runways || []).forEach(rwy => {
+      const leRef = normalizeIdent(rwy.le_ident);
+      const heRef = normalizeIdent(rwy.he_ident);
+      const pLe = [rwy.le_latitude, rwy.le_longitude];
+      const pHe = [rwy.he_latitude, rwy.he_longitude];
+      if (pLe[0] === null || pHe[0] === null) return;
+
+      const totalLen = haversine(pLe[0], pLe[1], pHe[0], pHe[1]);
+      const numSteps = Math.max(2, Math.ceil(totalLen / 50));
+      
+      let prevNode = this.addNode(pLe[0], pLe[1], 10.0);
+      for (let k = 1; k <= numSteps; k++) {
+        const frac = k / numSteps;
+        const lat = pLe[0] + frac * (pHe[0] - pLe[0]);
+        const lon = pLe[1] + frac * (pHe[1] - pLe[1]);
+        const currNode = this.addNode(lat, lon, 10.0);
+        const w = haversine(this.nodes[prevNode][0], this.nodes[prevNode][1], lat, lon);
+        this.addEdge(prevNode, currNode, leRef, true, w, [this.nodes[prevNode], this.nodes[currNode]]);
+        this.addEdge(prevNode, currNode, heRef, true, w, [this.nodes[prevNode], this.nodes[currNode]]);
+        prevNode = currNode;
+      }
+    });
+
+    // 3. Auto-bridge closely passing taxiway / runway nodes (crossings < 15m)
+    for (let i = 0; i < this.nodes.length; i++) {
+      for (let j = i + 1; j < this.nodes.length; j++) {
+        const d = haversine(this.nodes[i][0], this.nodes[i][1], this.nodes[j][0], this.nodes[j][1]);
+        if (d > 0.1 && d <= 15.0) {
+          const already = this.adj.get(i).some(e => e.to === j);
+          if (!already) {
+            this.addEdge(i, j, 'CONNECTOR', false, d, [this.nodes[i], this.nodes[j]]);
+          }
+        }
+      }
+    }
+  }
+
+  findNodesForRef(ref) {
+    const clean = normalizeIdent(ref);
+    const set = new Set();
+    for (const [u, edges] of this.adj.entries()) {
+      for (const e of edges) {
+        if (e.ref === clean) {
+          set.add(u);
+          set.add(e.to);
+        }
+      }
+    }
+    return Array.from(set);
+  }
+
+  findShortestPath(startNode, targetPredicate, preferredRef, refWeightMultiplier = 0.05) {
+    const cleanPref = normalizeIdent(preferredRef);
+    const distMap = new Map();
+    const prev = new Map();
+    const pq = [{ node: startNode, cost: 0 }];
+    distMap.set(startNode, 0);
+
+    let targetNode = null;
+
+    while (pq.length > 0) {
+      pq.sort((a, b) => a.cost - b.cost);
+      const { node: curr, cost } = pq.shift();
+
+      if (distMap.get(curr) < cost) continue;
+
+      if (targetPredicate(curr, this.nodes[curr])) {
+        targetNode = curr;
+        break;
+      }
+
+      for (const edge of this.adj.get(curr)) {
+        const isMatch = cleanPref && edge.ref === cleanPref;
+        const multiplier = isMatch ? refWeightMultiplier : (edge.ref === 'CONNECTOR' ? 1.0 : 4.0);
+        const edgeCost = edge.weight * multiplier;
+        const newCost = cost + edgeCost;
+
+        if (!distMap.has(edge.to) || newCost < distMap.get(edge.to)) {
+          distMap.set(edge.to, newCost);
+          prev.set(edge.to, { from: curr, edge });
+          pq.push({ node: edge.to, cost: newCost });
+        }
+      }
+    }
+
+    if (targetNode === null) return null;
+
+    // Reconstruct path
+    const pathCoords = [this.nodes[targetNode]];
+    let curr = targetNode;
+    while (prev.has(curr)) {
+      const { from, edge } = prev.get(curr);
+      const eCoords = [...edge.coords];
+      if (haversine(eCoords[eCoords.length - 1][0], eCoords[eCoords.length - 1][1], this.nodes[curr][0], this.nodes[curr][1]) > 1) {
+        eCoords.reverse();
+      }
+      for (let k = eCoords.length - 2; k >= 0; k--) {
+        pathCoords.unshift(eCoords[k]);
+      }
+      curr = from;
+    }
+
+    let trueDistM = 0;
+    for (let k = 0; k < pathCoords.length - 1; k++) {
+      trueDistM += haversine(pathCoords[k][0], pathCoords[k][1], pathCoords[k+1][0], pathCoords[k+1][1]);
+    }
+
+    return { targetNode, pathCoords, distM: trueDistM };
+  }
+
+  routeSequential(tokens, closedRefs = new Set()) {
+    if (!tokens || tokens.length === 0) return null;
+
+    const norm = tokens.map(t => {
+      let s = t.toUpperCase().trim();
+      let clean = normalizeIdent(s);
+      let isRwy = /^(RW|RUNWAY|RWY)/i.test(s) || /^[0-9]{1,2}[LCR]?$/.test(s);
+      let isClosed = closedRefs.has(clean) || closedRefs.has(s);
+      return { raw: s, clean, isRwy, isClosed };
+    });
+
+    const legs = [];
+    let currNode = null;
+    let fullCoords = [];
+
+    const token0Nodes = this.findNodesForRef(norm[0].clean);
+    const token1Nodes = norm.length > 1 ? this.findNodesForRef(norm[1].clean) : [];
+
+    if (token0Nodes.length === 0) return null;
+
+    if (norm.length === 1) {
+      // Single token
+      return null;
+    }
+
+    if (token1Nodes.length === 0) return null;
+
+    // If token 0 is a runway, start at the entry node closest to token 1
+    if (norm[0].isRwy) {
+      let minD = Infinity;
+      for (const u of token0Nodes) {
+        for (const v of token1Nodes) {
+          const d = haversine(this.nodes[u][0], this.nodes[u][1], this.nodes[v][0], this.nodes[v][1]);
+          if (d < minD) {
+            minD = d;
+            currNode = v;
+          }
+        }
+      }
+    } else {
+      // Start at token 0 furthest node from token 1
+      let bestStart = null;
+      let maxDistTo1 = -1;
+      for (const u of token0Nodes) {
+        let minDTo1 = Math.min(...token1Nodes.map(v => haversine(this.nodes[u][0], this.nodes[u][1], this.nodes[v][0], this.nodes[v][1])));
+        if (minDTo1 > maxDistTo1) {
+          maxDistTo1 = minDTo1;
+          bestStart = u;
+        }
+      }
+      currNode = bestStart;
+    }
+
+    if (currNode === null) return null;
+
+    // Route each leg sequentially
+    for (let i = 1; i < norm.length; i++) {
+      const nextToken = norm[i];
+      const targetNodes = new Set(this.findNodesForRef(nextToken.clean));
+      const currentRef = norm[i-1].isRwy ? norm[i].clean : norm[i-1].clean;
+      
+      const res = this.findShortestPath(currNode, (nodeId) => targetNodes.has(nodeId), currentRef, 0.05);
+      if (!res) break;
+
+      legs.push({
+        step: i,
+        token: nextToken.raw,
+        ref: nextToken.clean,
+        is_closed: nextToken.isClosed,
+        coordinates: res.pathCoords,
+        distance_m: Math.round(res.distM),
+        distance_ft: Math.round(res.distM * 3.28084)
+      });
+
+      if (fullCoords.length > 0) {
+        fullCoords.push(...res.pathCoords.slice(1));
+      } else {
+        fullCoords.push(...res.pathCoords);
+      }
+      currNode = res.targetNode;
+    }
+
+    // Traverse final token to its natural terminus along direction of travel
+    const lastNorm = norm[norm.length - 1];
+    if (!lastNorm.isRwy) {
+      const finalNodes = this.findNodesForRef(lastNorm.clean);
+      let furthestNode = null;
+      let maxD = 0;
+      for (const u of finalNodes) {
+        const d = haversine(this.nodes[currNode][0], this.nodes[currNode][1], this.nodes[u][0], this.nodes[u][1]);
+        if (d > maxD) {
+          maxD = d;
+          furthestNode = u;
+        }
+      }
+      if (furthestNode && furthestNode !== currNode) {
+        const finalRes = this.findShortestPath(currNode, (nodeId) => nodeId === furthestNode, lastNorm.clean, 0.05);
+        if (finalRes && finalRes.pathCoords.length > 1) {
+          legs.push({
+            step: norm.length,
+            token: lastNorm.raw + ' (Terminus)',
+            ref: lastNorm.clean,
+            is_closed: lastNorm.isClosed,
+            coordinates: finalRes.pathCoords,
+            distance_m: Math.round(finalRes.distM),
+            distance_ft: Math.round(finalRes.distM * 3.28084)
+          });
+          fullCoords.push(...finalRes.pathCoords.slice(1));
+        }
+      }
+    }
+
+    let totalDistM = 0;
+    for (let k = 0; k < fullCoords.length - 1; k++) {
+      totalDistM += haversine(fullCoords[k][0], fullCoords[k][1], fullCoords[k+1][0], fullCoords[k+1][1]);
+    }
+
+    const totalDistFt = Math.round(totalDistM * 3.28084);
+    const estTimeSec = totalDistM > 0 ? Math.round(totalDistM / 7.7) : 0;
+    const hasClosures = legs.some(l => l.is_closed);
+
+    return {
+      has_closures: hasClosures,
+      total_distance_ft: totalDistFt,
+      total_distance_m: Math.round(totalDistM),
+      est_time_sec: estTimeSec,
+      legs,
+      path_coordinates: fullCoords
+    };
+  }
+}
+
 app.post('/api/taxi-route', async (req, res) => {
   try {
     const { icao, route } = req.body;
@@ -946,6 +1233,7 @@ app.post('/api/taxi-route', async (req, res) => {
     const upperIcao = icao.toUpperCase().trim();
     const apt = airportsDb[upperIcao];
     const taxiways = await getAirportTaxiways(upperIcao, apt?.latitude, apt?.longitude);
+    const airportRunways = runwaysByIcao[upperIcao] || [];
     const allSources = await fetchAllAirportSources(upperIcao);
     const operational = resolveActiveOperational(allSources, 'real_world');
 
@@ -977,86 +1265,18 @@ app.post('/api/taxi-route', async (req, res) => {
       return res.status(400).json({ error: 'No valid taxiway tokens found' });
     }
 
-    const legs = [];
-    let combinedCoordinates = [];
-    let totalDistM = 0;
-    let hasClosures = false;
+    const graph = new TaxiwayGraph(taxiways, airportRunways);
+    const routingResult = graph.routeSequential(tokens, closedRefs);
 
-    // Helper: calculate distance between two lat/lons
-    const geoDistM = (lat1, lon1, lat2, lon2) => {
-      const R = 6371000;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    };
-
-    let lastPoint = null;
-
-    for (let i = 0; i < tokens.length; i++) {
-      let rawToken = tokens[i];
-      let cleanRef = rawToken.replace(/^(TWY|TAXIWAY|RWY|RUNWAY|RW)/i, '').trim() || rawToken;
-
-      const isClosed = closedRefs.has(cleanRef) || closedRefs.has(rawToken);
-      if (isClosed) hasClosures = true;
-
-      // Find matching taxiway segments (case-insensitive)
-      const matched = taxiways.filter(t => (t.ref && t.ref.toUpperCase() === cleanRef) || (t.ref && t.ref.toUpperCase() === rawToken));
-      
-      let legCoords = [];
-      let legDistM = 0;
-
-      if (matched.length > 0) {
-        // Collect all segments and orient them forward from lastPoint
-        matched.forEach(seg => {
-          if (!seg.coordinates || seg.coordinates.length < 2) return;
-          let coords = [...seg.coordinates];
-          if (lastPoint) {
-            const dStart = geoDistM(lastPoint[0], lastPoint[1], coords[0][0], coords[0][1]);
-            const dEnd   = geoDistM(lastPoint[0], lastPoint[1], coords[coords.length-1][0], coords[coords.length-1][1]);
-            if (dEnd < dStart) {
-              coords.reverse();
-            }
-          }
-          legCoords.push(...coords);
-          lastPoint = coords[coords.length - 1];
-        });
-      }
-
-      // Calculate leg distance
-      for (let j = 0; j < legCoords.length - 1; j++) {
-        legDistM += geoDistM(legCoords[j][0], legCoords[j][1], legCoords[j+1][0], legCoords[j+1][1]);
-      }
-
-      totalDistM += legDistM;
-      combinedCoordinates.push(...legCoords);
-
-      legs.push({
-        step: i + 1,
-        token: rawToken,
-        ref: cleanRef,
-        is_closed: isClosed,
-        distance_ft: Math.round(legDistM * 3.28084),
-        distance_m: Math.round(legDistM),
-        segment_count: matched.length,
-        coordinates: legCoords
-      });
+    if (!routingResult || routingResult.path_coordinates.length === 0) {
+      return res.status(404).json({ error: 'Could not find a continuous connected taxiway route for the given sequence.' });
     }
-
-    const totalDistFt = Math.round(totalDistM * 3.28084);
-    // Standard taxi speed ~ 15 kts = 7.7 m/s
-    const estTimeSec = totalDistM > 0 ? Math.round(totalDistM / 7.7) : 0;
 
     return res.json({
       icao: upperIcao,
       route_raw: route,
       tokens,
-      has_closures: hasClosures,
-      total_distance_ft: totalDistFt,
-      total_distance_m: Math.round(totalDistM),
-      est_time_sec: estTimeSec,
-      legs,
-      path_coordinates: combinedCoordinates
+      ...routingResult
     });
 
   } catch (err) {
