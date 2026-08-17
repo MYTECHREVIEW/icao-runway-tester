@@ -493,6 +493,7 @@ function renderFeedsPanel(operational) {
 
 function updateResults(data) {
   lastResult = data;
+  document.getElementById('instructionCard').classList.add('hidden');
   const { on_runway, on_taxiway, active_taxiway: twy, within_runway_scope, airport, operational, active_runway: rwy, runways } = data;
 
   // If pin dropped on a runway, auto-select that runway to isolate it!
@@ -868,7 +869,7 @@ function updateResults(data) {
 
 function showLoading(show) {
   document.getElementById('loadingCard').classList.toggle('hidden', !show);
-  document.getElementById('instructionCard').classList.toggle('hidden', show);
+  if (show) document.getElementById('instructionCard').classList.add('hidden');
 }
 
 // ── API Call ──────────────────────────────────────────────────────────────────
