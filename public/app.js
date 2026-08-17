@@ -13,6 +13,15 @@ let mapboxToken = localStorage.getItem(MAPBOX_STORAGE_KEY) || '';
 let userSourcePref = localStorage.getItem(SOURCE_PREF_KEY) || 'real_world';
 let showTaxiways = localStorage.getItem(SHOW_TAXIWAYS_KEY) !== 'false';
 
+// ── State ─────────────────────────────────────────────────────────────────────
+
+let pinMarker         = null;
+let runwayLayers      = [];
+let devLineLayer      = null;
+let lastResult        = null;
+let currentCoords     = null;
+let selectedRunwayKey = null; // When selected, only this runway is visible on the map!
+
 // ── Tile Layers ───────────────────────────────────────────────────────────────
 
 function getMapboxLayer(token) {
@@ -99,14 +108,6 @@ async function setupPrecisionMapbox() {
 
 setupPrecisionMapbox();
 
-// ── State ─────────────────────────────────────────────────────────────────────
-
-let pinMarker      = null;
-let runwayLayers   = [];
-let devLineLayer   = null;
-let lastResult     = null;
-let currentCoords  = null;
-
 // ── Marker Icon Factory ───────────────────────────────────────────────────────
 
 function pinIcon(onRunway, isClosed, onTaxiway) {
@@ -179,57 +180,89 @@ function drawTaxiways(taxiways) {
     if (!twy.coordinates || twy.coordinates.length < 2) continue;
 
     const isClosed = twy.is_closed;
-    const color = isClosed ? '#ff4757' : '#f1c40f';
-    const weight = isClosed ? 3.5 : 2.5;
-    const dash = isClosed ? '5,5' : null;
+    const color = isClosed ? '#ff4757' : '#ffb800';
+    const weight = isClosed ? 4.5 : 2.5;
+    const dash = isClosed ? '8,4' : null;
 
     const line = L.polyline(twy.coordinates, {
       color,
       weight,
       dashArray: dash,
-      opacity: 0.88,
+      opacity: isClosed ? 0.95 : 0.88,
       lineCap: 'round',
       lineJoin: 'round'
     });
     taxiwayLayerGroup.addLayer(line);
 
-    // Add taxiway designator label along midpoint
+    // If taxiway is closed, add Red "X" markers at start, mid, end
+    if (isClosed) {
+      const midIdx = Math.floor(twy.coordinates.length / 2);
+      const sampleIndices = [0, midIdx, twy.coordinates.length - 1];
+      for (const idx of sampleIndices) {
+        const [cLat, cLon] = twy.coordinates[idx];
+        const xMarker = L.marker([cLat, cLon], {
+          icon: L.divIcon({
+            className: '',
+            html: `<div class="twy-x-marker">✕</div>`,
+            iconAnchor: [11, 11]
+          })
+        });
+        taxiwayLayerGroup.addLayer(xMarker);
+      }
+    }
+
+    // Add readable taxiway designator badge along midpoint
     if (twy.ref && !renderedLabels.has(twy.ref)) {
       renderedLabels.add(twy.ref);
       const midIdx = Math.floor(twy.coordinates.length / 2);
       const [mLat, mLon] = twy.coordinates[midIdx];
 
       const badgeHtml = isClosed
-        ? `<div class="twy-map-badge closed">🚫 ${twy.ref} [CLSD]</div>`
-        : `<div class="twy-map-badge">${twy.ref}</div>`;
+        ? `<div class="twy-map-badge closed">❌ TWY ${twy.ref} [CLSD]</div>`
+        : `<div class="twy-map-badge">TWY ${twy.ref}</div>`;
 
       const badge = L.marker([mLat, mLon], {
-        icon: L.divIcon({ className: '', html: badgeHtml, iconAnchor: [10, 8] })
+        icon: L.divIcon({ className: '', html: badgeHtml, iconAnchor: [18, 10] })
       });
       taxiwayLayerGroup.addLayer(badge);
     }
   }
 }
 
+function getRunwayKey(r) {
+  if (!r) return null;
+  return `${r.airport_icao || ''}_${r.le_ident || ''}_${r.he_ident || ''}`;
+}
+
 function drawRunways(data) {
-  const runwaysToDraw = data.runways || [];
+  let allRunways = data.runways || [];
+
+  // If a specific runway is selected, ISOLATE it: only draw the selected runway path!
+  let runwaysToDraw = allRunways;
+  if (selectedRunwayKey) {
+    const matched = allRunways.filter(r => getRunwayKey(r) === selectedRunwayKey);
+    if (matched.length > 0) {
+      runwaysToDraw = matched;
+    }
+  }
 
   for (const rwy of runwaysToDraw) {
     if (!rwy.le_latitude || !rwy.he_latitude) continue;
 
     const isClosed = rwy.is_closed || (rwy.analysis && rwy.analysis.is_closed);
-    const isActive = data.active_runway &&
+    const isSelected = selectedRunwayKey && getRunwayKey(rwy) === selectedRunwayKey;
+    const isActive = isSelected || (data.active_runway &&
       rwy.airport_icao === data.active_runway.airport_icao &&
-      rwy.le_ident === data.active_runway.le_ident;
+      rwy.le_ident === data.active_runway.le_ident);
 
     let polyColor = isClosed ? '#ff4757' : (isActive ? (data.on_runway ? '#00ff88' : '#00d4ff') : 'rgba(0,212,255,0.45)');
-    let polyFill  = isClosed ? 'rgba(255, 71, 87, 0.35)' : (isActive ? (data.on_runway ? 'rgba(0,255,136,0.18)' : 'rgba(0,212,255,0.12)') : 'rgba(0,212,255,0.05)');
+    let polyFill  = isClosed ? 'rgba(255, 71, 87, 0.35)' : (isActive ? (data.on_runway ? 'rgba(0,255,136,0.18)' : 'rgba(0,212,255,0.14)') : 'rgba(0,212,255,0.05)');
     let lineColor = isClosed ? '#ff4757' : (isActive ? '#00ff88' : 'rgba(0,212,255,0.6)');
 
     const polyCoords = computeRunwayPolygon(rwy.le_latitude, rwy.le_longitude, rwy.he_latitude, rwy.he_longitude, rwy.width_ft);
     const poly = L.polygon(polyCoords, {
       color: polyColor,
-      weight: isClosed ? 3 : (isActive ? 2.5 : 1),
+      weight: isClosed ? 3.5 : (isActive ? 3 : 1.5),
       fillColor: polyFill,
       fillOpacity: 1
     }).addTo(map);
@@ -246,20 +279,21 @@ function drawRunways(data) {
     ).addTo(map);
     runwayLayers.push(line);
 
+    // Readable, high-contrast runway threshold boxes
     const leBadgeHtml = isClosed
-      ? `<div style="background:#ff4757;color:#fff;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800;padding:3px 7px;border:1px solid #fff;border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(255,71,87,0.7);">🚫 RW ${rwy.le_ident} [CLSD]</div>`
-      : `<div style="background:rgba(10,13,20,0.9);color:#00d4ff;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:700;padding:3px 7px;border:1px solid rgba(0,212,255,0.6);border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.7);">${rwy.le_ident}</div>`;
+      ? `<div class="rwy-map-badge closed">🚫 RW ${rwy.le_ident} [CLSD]</div>`
+      : `<div class="rwy-map-badge">RW ${rwy.le_ident}</div>`;
 
     const heBadgeHtml = isClosed
-      ? `<div style="background:#ff4757;color:#fff;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800;padding:3px 7px;border:1px solid #fff;border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(255,71,87,0.7);">🚫 RW ${rwy.he_ident} [CLSD]</div>`
-      : `<div style="background:rgba(10,13,20,0.9);color:#00d4ff;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:700;padding:3px 7px;border:1px solid rgba(0,212,255,0.6);border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.7);">${rwy.he_ident}</div>`;
+      ? `<div class="rwy-map-badge closed">🚫 RW ${rwy.he_ident} [CLSD]</div>`
+      : `<div class="rwy-map-badge">RW ${rwy.he_ident}</div>`;
 
     const leLabel = rwy.le_ident ? L.marker([rwy.le_latitude, rwy.le_longitude], {
-      icon: L.divIcon({ className: '', html: leBadgeHtml, iconAnchor: [16, 12] })
+      icon: L.divIcon({ className: '', html: leBadgeHtml, iconAnchor: [24, 12] })
     }).addTo(map) : null;
 
     const heLabel = rwy.he_ident ? L.marker([rwy.he_latitude, rwy.he_longitude], {
-      icon: L.divIcon({ className: '', html: heBadgeHtml, iconAnchor: [16, 12] })
+      icon: L.divIcon({ className: '', html: heBadgeHtml, iconAnchor: [24, 12] })
     }).addTo(map) : null;
 
     if (leLabel) runwayLayers.push(leLabel);
@@ -299,14 +333,14 @@ function drawRunways(data) {
       [[data.lat, data.lon], [projLat, projLon]],
       {
         color: '#ff4757',
-        weight: 2,
+        weight: 2.5,
         dashArray: '3,3',
-        opacity: 0.9
+        opacity: 0.95
       }
     ).addTo(map);
 
     const centerPoint = L.circleMarker([projLat, projLon], {
-      radius: 4,
+      radius: 4.5,
       color: '#00ff88',
       fillColor: '#ffffff',
       fillOpacity: 1
@@ -359,7 +393,7 @@ function renderNotamsPanel(operational, icao) {
       badgeLabel = '💡 NAVAID/LIGHT';
     } else if (n.type === 'TAXIWAY_APRON') {
       badgeClass = 'taxiway';
-      badgeLabel = '🚧 TAXIWAY';
+      badgeLabel = n.is_closure ? '❌ TWY CLOSURE' : '🚧 TAXIWAY';
     } else if (n.type === 'HAZARD') {
       badgeClass = 'hazard';
       badgeLabel = '⚠️ HAZARD';
@@ -459,6 +493,11 @@ function renderFeedsPanel(operational) {
 function updateResults(data) {
   lastResult = data;
   const { on_runway, on_taxiway, active_taxiway: twy, within_runway_scope, airport, operational, active_runway: rwy, runways } = data;
+
+  // If pin dropped on a runway, auto-select that runway to isolate it!
+  if (on_runway && rwy) {
+    selectedRunwayKey = getRunwayKey(rwy);
+  }
 
   // 1. Coordinates card
   document.getElementById('coordsCard').classList.remove('hidden');
@@ -585,11 +624,11 @@ function updateResults(data) {
       const isClosed = twy.is_closed;
 
       const badgeHtml = isClosed
-        ? `<span class="rwy-active-badge closed">🚫 TWY ${twy.ref || ''} CLOSED</span>`
+        ? `<span class="rwy-active-badge closed">❌ TWY ${twy.ref || ''} CLOSED</span>`
         : `<span class="twy-active-badge">🚖 TWY ${twy.ref || 'Taxiway'}</span>`;
 
       const closedNoticeHtml = isClosed
-        ? `<div class="closed-rwy-notice">⚠️ TAXIWAY ${twy.ref || ''} CLOSED BY NOTAM</div>`
+        ? `<div class="closed-rwy-notice">❌ TAXIWAY ${twy.ref || ''} CLOSED BY NOTAM: ${twy.closure_reason || 'Out of service'}</div>`
         : '';
 
       const popupHtml = `
@@ -674,8 +713,8 @@ function updateResults(data) {
       text.textContent = `On Runway ${rwy.analysis?.runway_end_ident || ''} (${operational?.source_label || 'Active'})`;
     }
   } else if (on_taxiway && twy) {
-    banner.classList.add('near-runway');
-    icon.textContent = '🚖';
+    banner.classList.add(twy.is_closed ? 'off-runway' : 'near-runway');
+    icon.textContent = twy.is_closed ? '❌' : '🚖';
     text.textContent = twy.is_closed
       ? `On Closed Taxiway ${twy.ref || ''} (NOTAM)`
       : `On Taxiway ${twy.ref || ''} (${airport?.icao || ''})`;
@@ -766,24 +805,53 @@ function updateResults(data) {
 
   if (runways && runways.length > 0) {
     nearbyPanel.classList.remove('hidden');
-    document.getElementById('nearbyTitle').textContent = airport ? `${airport.icao} Runways (${runways.length})` : 'Airport Runways';
     
+    // Add "Show All Runways" button if a runway is isolated
+    const headerHtml = `
+      <div class="panel-header-left">
+        <span class="panel-icon">🛫</span>
+        <span class="panel-title">${airport ? `${airport.icao} Runways (${runways.length})` : 'Airport Runways'}</span>
+      </div>
+      ${selectedRunwayKey ? `<button class="btn-reset-view" id="btnShowAllRunways">Show All Runways</button>` : ''}
+    `;
+    document.querySelector('#nearbyPanel .panel-header').innerHTML = headerHtml;
+
+    const btnShowAll = document.getElementById('btnShowAllRunways');
+    if (btnShowAll) {
+      btnShowAll.addEventListener('click', () => {
+        selectedRunwayKey = null;
+        updateResults(lastResult);
+        clearRunwayLayers();
+        drawRunways(lastResult);
+      });
+    }
+
     runways.forEach((n) => {
       const isClosed = n.is_closed || (n.analysis && n.analysis.is_closed);
-      const isActive = rwy && n.airport_icao === rwy.airport_icao && n.le_ident === rwy.le_ident;
+      const isSelected = selectedRunwayKey && getRunwayKey(n) === selectedRunwayKey;
+      const isActive = isSelected || (!selectedRunwayKey && rwy && n.airport_icao === rwy.airport_icao && n.le_ident === rwy.le_ident);
+
       const item = document.createElement('div');
       item.className = 'nearby-item' + (isActive ? ' active' : '') + (isClosed ? ' closed-item' : '');
       
       const closedTag = isClosed ? ` <span style="background:#ff4757;color:#fff;font-size:9.5px;padding:1px 5px;border-radius:3px;font-weight:800;margin-left:4px;">CLOSED</span>` : '';
+      const selectedTag = isSelected ? ` <span style="background:var(--accent);color:#0a0d14;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:800;margin-left:4px;">ISOLATED</span>` : '';
 
       item.innerHTML = `
         <div>
-          <div class="nearby-ident">RW ${n.le_ident || '?'}/${n.he_ident || '?'}${closedTag}</div>
+          <div class="nearby-ident">RW ${n.le_ident || '?'}/${n.he_ident || '?'}${closedTag}${selectedTag}</div>
           <div class="nearby-airport">${fmt(n.length_ft)} ft × ${fmt(n.width_ft)} ft &bull; ${n.surface || 'Paved'}</div>
         </div>
         <div class="nearby-dist">${n.centerline_bearing_deg || 0}&deg;</div>
       `;
+
       item.addEventListener('click', () => {
+        // Isolate selected runway on click!
+        selectedRunwayKey = getRunwayKey(n);
+        updateResults(lastResult);
+        clearRunwayLayers();
+        drawRunways(lastResult);
+
         if (n.le_latitude && n.he_latitude) {
           const midLat = (n.le_latitude + n.he_latitude) / 2;
           const midLon = (n.le_longitude + n.he_longitude) / 2;
@@ -920,6 +988,7 @@ async function goToAirport(query) {
     const results = await resp.json();
     if (results && results[0]) {
       const { lat, lon } = results[0];
+      selectedRunwayKey = null;
       map.flyTo([parseFloat(lat), parseFloat(lon)], 16, { duration: 1.5 });
       return;
     }
@@ -937,4 +1006,4 @@ document.getElementById('airportSearch').addEventListener('keydown', (e) => {
 
 initControls();
 showLoading(false);
-console.log('🛬 ICAO Runway Analyzer ready with Taxiway Network layer.');
+console.log('🛬 ICAO Runway Analyzer ready with Taxiway Network layer and Runway Isolation.');

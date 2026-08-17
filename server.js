@@ -848,18 +848,32 @@ app.post('/api/analyze', async (req, res) => {
 
     // 5. Fetch & Correlate Taxiways with NOTAMs
     const rawTaxiways = selectedAirportIcao ? await getAirportTaxiways(selectedAirportIcao, primaryAirport?.latitude, primaryAirport?.longitude) : [];
+    
+    // Extract closed taxiway designators from NOTAMs
+    const closedTwyMap = new Map();
+    if (operationalCtx && operationalCtx.notams) {
+        for (const n of operationalCtx.notams) {
+            if (/\b(?:TAXIWAY|TWY|APRON|RAMP)\b/i.test(n.text) && /\b(?:CLSD|CLOSED|UNUSABLE)\b/i.test(n.text)) {
+                n.is_closure = true;
+                const m = n.text.match(/\b(?:TAXIWAY|TWY)\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)*)/i);
+                if (m && m[1]) {
+                    const parts = m[1].split(/\s+/);
+                    for (const p of parts) {
+                        const up = p.toUpperCase();
+                        if (['CLOSED', 'CLSD', 'WEST', 'EAST', 'NORTH', 'SOUTH', 'OF', 'FOR', 'BETWEEN', 'AND'].includes(up)) break;
+                        closedTwyMap.set(up, n.text);
+                    }
+                }
+            }
+        }
+    }
+
     const analyzedTaxiways = rawTaxiways.map(twy => {
         let isClosed = false;
         let closureReason = null;
-        if (twy.ref && operationalCtx && operationalCtx.notams) {
-            const matchingNotam = operationalCtx.notams.find(n => 
-                n.type === 'TAXIWAY_APRON' && 
-                new RegExp(`\b(?:TAXIWAY|TWY)\s+${twy.ref}\b`, 'i').test(n.text)
-            );
-            if (matchingNotam) {
-                isClosed = true;
-                closureReason = matchingNotam.text;
-            }
+        if (twy.ref && closedTwyMap.has(twy.ref)) {
+            isClosed = true;
+            closureReason = closedTwyMap.get(twy.ref);
         }
         return {
             ...twy,
