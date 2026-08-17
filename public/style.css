@@ -48,12 +48,13 @@ body {
   display: flex;
 }
 
-/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+/* ── Sidebar (Uncompressed, Natural Height & Smooth Scrolling) ───────────── */
 .sidebar {
-  width: 380px;
-  min-width: 360px;
-  max-width: 400px;
+  width: 410px;
+  min-width: 390px;
+  max-width: 430px;
   height: 100vh;
+  max-height: 100vh;
   background: var(--bg-surface);
   border-right: 1px solid var(--border);
   display: flex;
@@ -61,8 +62,38 @@ body {
   z-index: 1000;
   box-shadow: 4px 0 24px rgba(0, 0, 0, 0.6);
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px;
-  gap: 12px;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+/* Custom Sleek Aviation Scrollbar */
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar::-webkit-scrollbar-track {
+  background: var(--bg-base);
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.25);
+  border-radius: 3px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* Ensure no element inside sidebar gets squished/compressed */
+.sidebar-header,
+.instruction-card,
+.loading-card,
+.coords-card,
+.airport-card,
+.status-banner,
+.panel,
+.sidebar-footer {
+  flex-shrink: 0 !important;
+  width: 100%;
 }
 
 .sidebar-header {
@@ -163,7 +194,7 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border-glow);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
+  padding: 14px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
@@ -226,7 +257,7 @@ body {
 }
 
 .airport-name {
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 4px;
@@ -234,13 +265,13 @@ body {
 }
 
 .airport-location {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
 /* Status Banner */
 .status-banner {
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 600;
@@ -324,7 +355,7 @@ body {
 .divider {
   height: 1px;
   background: var(--border);
-  margin: 2px 0;
+  margin: 4px 0;
 }
 
 /* Deviation Section */
@@ -388,7 +419,7 @@ body {
 .deviation-values {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 11.5px;
   font-family: var(--font-mono);
 }
 
@@ -410,7 +441,7 @@ body {
 .td-gauge-wrap {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .td-gauge-track {
@@ -524,7 +555,180 @@ body {
   font-weight: 600;
 }
 
-/* Runways List */
+/* ── ATIS Source Selector Controls ───────────────────────────────────────── */
+.source-selector-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.source-pills-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.source-pill {
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.source-pill:hover {
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.source-pill.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.25);
+}
+
+.active-source-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 4px;
+}
+
+.indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+}
+
+/* ── Multi-Source Feeds Container ────────────────────────────────────────── */
+.feeds-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.feed-card {
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.feed-card.active-feed {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
+}
+
+.feed-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.feed-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+}
+
+.feed-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+.feed-badge.online {
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1px solid var(--green);
+}
+
+.feed-badge.offline {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.feed-badge.active-tag {
+  background: var(--accent);
+  color: var(--bg-base);
+  font-weight: 800;
+}
+
+.feed-content {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.feed-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.feed-summary-item {
+  display: flex;
+  gap: 4px;
+}
+
+.feed-summary-label {
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.feed-summary-val {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.feed-text-block {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: #cbd5e1;
+  line-height: 1.45;
+  max-height: 140px;
+  overflow-y: auto;
+  word-break: break-word;
+}
+
+/* ── Runways List ────────────────────────────────────────────────────────── */
 .nearby-list {
   display: flex;
   flex-direction: column;
@@ -536,7 +740,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 10px;
+  padding: 9px 12px;
   background: var(--bg-base);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -573,7 +777,7 @@ body {
 }
 
 .sidebar-footer {
-  margin-top: auto;
+  margin-top: 10px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
   display: flex;
@@ -658,7 +862,7 @@ body {
   box-shadow: 0 4px 12px rgba(0, 255, 136, 0.7);
 }
 
-/* ── On-Pin Leaflet Popup Card (Wide, Spacious & Perfectly Positioned Close Button) ── */
+/* ── On-Pin Leaflet Popup Card ───────────────────────────────────────────── */
 .leaflet-popup-content-wrapper {
   background: var(--bg-surface) !important;
   border: 1px solid var(--border-glow) !important;
@@ -680,7 +884,6 @@ body {
   border: 1px solid var(--border-glow) !important;
 }
 
-/* Perfectly Centered & Aligned Close Button */
 .leaflet-popup-close-button {
   position: absolute !important;
   top: 14px !important;
@@ -728,12 +931,11 @@ body {
   border-left: 5px solid var(--accent);
 }
 
-/* Header badge row with clearance for the close button */
 .pin-popup-badge-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-right: 36px; /* Strict clearance for 26px close button */
+  padding-right: 36px;
 }
 
 .rwy-active-badge {
@@ -772,7 +974,6 @@ body {
   color: var(--text-secondary);
 }
 
-/* Operational Info Strip (Landing/Departing + Wind) */
 .pin-popup-op-strip {
   display: flex;
   flex-direction: column;
@@ -801,7 +1002,6 @@ body {
   color: var(--accent);
 }
 
-/* METAR snippet block */
 .metar-block {
   background: var(--bg-base);
   border: 1px solid var(--border);
@@ -814,7 +1014,6 @@ body {
   word-break: break-all;
 }
 
-/* Runway Detailed Grid (Strict 2-Column Alignment & No Awkward Wrapping) */
 .pin-popup-rwy-details {
   display: flex;
   flex-direction: column;
@@ -849,183 +1048,4 @@ body {
 .rwy-metric-val.green {
   color: var(--green);
   font-weight: 700;
-}
-
-/* ── ATIS / Weather Source Control Panel Styles ──────────────────────────── */
-.source-selector-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 2px;
-}
-
-.source-pills-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-}
-
-.source-pill {
-  background: var(--bg-base);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 6px 0;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  text-align: center;
-}
-
-.source-pill:hover {
-  border-color: var(--accent);
-  color: #fff;
-}
-
-.source-pill.active {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--accent);
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.25);
-}
-
-.source-pill.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  border-color: var(--border-subtle);
-}
-
-.active-source-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--bg-base);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 6px 10px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-top: 4px;
-}
-
-.indicator-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 8px var(--green);
-}
-
-/* ── Multi-Source Feeds Container ────────────────────────────────────────── */
-.feeds-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.feed-card {
-  background: var(--bg-base);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  transition: border-color 0.2s;
-}
-
-.feed-card.active-feed {
-  border-color: var(--accent);
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
-}
-
-.feed-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 7px 10px;
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border);
-  font-size: 11.5px;
-  font-weight: 700;
-}
-
-.feed-card-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-primary);
-}
-
-.feed-badge {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-weight: 700;
-}
-
-.feed-badge.online {
-  background: var(--green-dim);
-  color: var(--green);
-  border: 1px solid var(--green);
-}
-
-.feed-badge.offline {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-}
-
-.feed-badge.active-tag {
-  background: var(--accent);
-  color: var(--bg-base);
-  font-weight: 800;
-}
-
-.feed-content {
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 11.5px;
-}
-
-.feed-summary-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-}
-
-.feed-summary-item {
-  display: flex;
-  gap: 4px;
-}
-
-.feed-summary-label {
-  color: var(--text-muted);
-  font-size: 10.5px;
-}
-
-.feed-summary-val {
-  font-family: var(--font-mono);
-  color: var(--accent);
-  font-weight: 700;
-  font-size: 11px;
-}
-
-.feed-text-block {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  padding: 6px 8px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: #a0aec0;
-  line-height: 1.4;
-  max-height: 120px;
-  overflow-y: auto;
-  word-break: break-word;
 }
