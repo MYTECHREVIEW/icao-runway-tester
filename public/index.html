@@ -3,12 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ICAO Runway Analyzer — High Precision Touchdown &amp; Centerline Tester</title>
+  <title>ICAO Runway Analyzer — Touchdown &amp; Centerline Precision Tester</title>
 
-  <!-- Google Fonts & Leaflet CSS -->
+  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
 
@@ -22,62 +24,33 @@
 
     <!-- Header -->
     <div class="sidebar-header">
-      <div class="logo-area">
-        <div class="logo-badge">✈️</div>
+      <div class="logo">
+        <span class="logo-icon">✈</span>
         <div>
-          <h1 class="app-title">Runway Analyzer</h1>
-          <div class="app-desc">ICAO Touchdown &amp; Centerline Precision</div>
+          <div class="logo-title">Runway Analyzer</div>
+          <div class="logo-sub">ICAO Touchdown &amp; Centerline Tester</div>
         </div>
-      </div>
-      <div class="sidebar-search-box">
-        <input type="text" id="airportSearch" placeholder="Search airport (e.g. KLGA, KJFK, EGLL)…" spellcheck="false" />
-        <button id="searchBtn">Go</button>
       </div>
     </div>
 
-    <!-- Initial Instruction / Help (Hidden once pin is active) -->
+    <!-- Instruction -->
     <div class="instruction-card" id="instructionCard">
       <div class="instruction-icon">📍</div>
-      <div class="instruction-title">Drop a Pin on Any Airport or Runway</div>
-      <div class="instruction-body">
-        Click anywhere on the map or search an ICAO code above to analyze runway geometry, centerline deviation, live ATIS, and NOTAM closures.
+      <div class="instruction-text">
+        <strong>Click anywhere on the map</strong> to drop a pin on an airport or runway.
       </div>
     </div>
 
-    <!-- Loading State Indicator -->
+    <!-- Loading -->
     <div class="loading-card hidden" id="loadingCard">
-      <div class="loading-spinner">📡</div>
-      <div class="instruction-title">Analyzing Airport Operations…</div>
-      <div class="instruction-body">Retrieving FAA geodetics, multi-source ATIS, and live NOTAMs…</div>
+      <div class="spinner"></div>
+      <span>Analyzing position &amp; weather feeds...</span>
     </div>
 
-    <!-- Pin Coordinates -->
+    <!-- Coordinates display -->
     <div class="coords-card hidden" id="coordsCard">
-      <div class="coords-label">📍 Pin Coordinates</div>
-      <div class="coords-val" id="coordsValue">—</div>
-    </div>
-
-    <!-- ── Map Layers & Display Settings ──────────────────────────────── -->
-    <div class="panel" id="displaySettingsPanel">
-      <div class="panel-header">
-        <span class="panel-icon">🗺️</span>
-        <span class="panel-title">Map Layers &amp; Overlays</span>
-      </div>
-      <div class="panel-body">
-        <div class="toggle-row">
-          <div class="toggle-label-wrap">
-            <span class="toggle-icon">🚖</span>
-            <div>
-              <div class="toggle-title">Taxiway Network</div>
-              <div class="toggle-desc">Centerlines, designations &amp; closures</div>
-            </div>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="taxiwayToggle" checked />
-            <span class="slider"></span>
-          </label>
-        </div>
-      </div>
+      <div class="coords-label">📌 Pin Location</div>
+      <div class="coords-value" id="coordsValue">—</div>
     </div>
 
     <!-- ── Airport Info Card ───────────────────────────────────────────── -->
@@ -121,6 +94,17 @@
     <div class="status-banner hidden" id="statusBanner">
       <span class="status-icon" id="statusIcon"></span>
       <span class="status-text" id="statusText"></span>
+    </div>
+
+    <!-- ── Full Multi-Source ATIS & METAR Feed Panel ────────────────────── -->
+    <div class="panel hidden" id="atisFeedsPanel">
+      <div class="panel-header">
+        <span class="panel-icon">📡</span>
+        <span class="panel-title">Airport Weather &amp; ATIS Feeds</span>
+      </div>
+      <div class="panel-body feeds-body" id="feedsContainer">
+        <!-- Injected via JavaScript -->
+      </div>
     </div>
 
     <!-- ── Runway Measurement Panel (Shown ONLY when on/near runway) ────── -->
@@ -227,27 +211,45 @@
       </div>
     </div>
 
-    <!-- ── Full Multi-Source ATIS & METAR Feed Panel ────────────────────── -->
-    <div class="panel hidden" id="atisFeedsPanel">
+    <!-- ── Map Layers & Display Settings ──────────────────────────────── -->
+    <div class="panel" id="displaySettingsPanel">
       <div class="panel-header">
-        <span class="panel-icon">📡</span>
-        <span class="panel-title">Airport Weather &amp; ATIS Feeds</span>
+        <span class="panel-icon">🗺️</span>
+        <span class="panel-title">Map Layers &amp; Overlays</span>
       </div>
-      <div class="panel-body feeds-body" id="feedsContainer">
-        <!-- Injected via JavaScript -->
+      <div class="panel-body">
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <span class="toggle-icon">🚖</span>
+            <div>
+              <div class="toggle-title">Taxiway Network</div>
+              <div class="toggle-desc">Centerlines, designations &amp; closures</div>
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="taxiwayToggle" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
       </div>
     </div>
 
     <!-- Footer -->
     <div class="sidebar-footer">
-      <div>FAA Geodetics • Real ATIS • VATSIM • IVAO • METAR</div>
-      <div>MYTECHREVIEW / icao-runway-database</div>
+      <span>FAA GIS Geodetic Survey • Real ATIS • VATSIM • IVAO • METAR</span>
+      <span>MYTECHREVIEW / icao-runway-database</span>
     </div>
 
   </aside>
 
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
   <div id="map"></div>
+
+  <!-- ── Search Bar (Top Right) ───────────────────────────────────────────── -->
+  <div class="search-bar">
+    <input type="text" id="airportSearch" placeholder="Go to airport… (e.g. KLGA, KJFK, EGLL)" spellcheck="false" />
+    <button id="searchBtn">Go</button>
+  </div>
 
   <script src="app.js"></script>
 </body>
