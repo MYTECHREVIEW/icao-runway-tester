@@ -202,9 +202,10 @@ function drawTaxiways(taxiways) {
         const [cLat, cLon] = twy.coordinates[idx];
         const xMarker = L.marker([cLat, cLon], {
           icon: L.divIcon({
-            className: '',
+            className: 'aviation-sign-icon',
             html: `<div class="twy-x-marker">✕</div>`,
-            iconAnchor: [11, 11]
+            iconSize: null,
+            iconAnchor: [0, 0]
           })
         });
         taxiwayLayerGroup.addLayer(xMarker);
@@ -222,7 +223,7 @@ function drawTaxiways(taxiways) {
         : `<div class="twy-map-badge">TWY ${twy.ref}</div>`;
 
       const badge = L.marker([mLat, mLon], {
-        icon: L.divIcon({ className: '', html: badgeHtml, iconAnchor: [18, 10] })
+        icon: L.divIcon({ className: 'aviation-sign-icon', html: badgeHtml, iconSize: null, iconAnchor: [0, 0] })
       });
       taxiwayLayerGroup.addLayer(badge);
     }
@@ -289,11 +290,11 @@ function drawRunways(data) {
       : `<div class="rwy-map-badge">RW ${rwy.he_ident}</div>`;
 
     const leLabel = rwy.le_ident ? L.marker([rwy.le_latitude, rwy.le_longitude], {
-      icon: L.divIcon({ className: '', html: leBadgeHtml, iconAnchor: [24, 12] })
+      icon: L.divIcon({ className: 'aviation-sign-icon', html: leBadgeHtml, iconSize: null, iconAnchor: [0, 0] })
     }).addTo(map) : null;
 
     const heLabel = rwy.he_ident ? L.marker([rwy.he_latitude, rwy.he_longitude], {
-      icon: L.divIcon({ className: '', html: heBadgeHtml, iconAnchor: [24, 12] })
+      icon: L.divIcon({ className: 'aviation-sign-icon', html: heBadgeHtml, iconSize: null, iconAnchor: [0, 0] })
     }).addTo(map) : null;
 
     if (leLabel) runwayLayers.push(leLabel);
