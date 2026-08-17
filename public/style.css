@@ -1049,3 +1049,104 @@ body {
   color: var(--green);
   font-weight: 700;
 }
+
+/* ── Airport NOTAMs Panel Styles ─────────────────────────────────────────── */
+.notams-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notam-item {
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.notam-item.notam-closure {
+  background: rgba(255, 71, 87, 0.12);
+  border: 1px solid rgba(255, 71, 87, 0.6);
+  box-shadow: 0 0 12px rgba(255, 71, 87, 0.2);
+}
+
+.notam-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.notam-badge {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.notam-badge.closure {
+  background: var(--red);
+  color: #fff;
+}
+
+.notam-badge.navaid {
+  background: var(--yellow-dim);
+  color: var(--yellow);
+  border: 1px solid var(--yellow);
+}
+
+.notam-badge.taxiway {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.notam-badge.hazard {
+  background: rgba(255, 107, 129, 0.2);
+  color: #ff6b81;
+  border: 1px solid #ff6b81;
+}
+
+.notam-badge.general {
+  background: var(--bg-card);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.notam-text {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.notam-closure .notam-text {
+  color: #ff8b94;
+  font-weight: 600;
+}
+
+/* Closed Runway On-Pin Card Badges */
+.rwy-active-badge.closed {
+  background: var(--red) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 10px rgba(255, 71, 87, 0.6);
+}
+
+.closed-rwy-notice {
+  background: rgba(255, 71, 87, 0.15);
+  border: 1px solid var(--red);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--red);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

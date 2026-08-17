@@ -1,6 +1,6 @@
 /**
  * app.js — Runway Analyzer Map Frontend
- * High-Precision Geodetic Alignments with Auto-Configured Mapbox Maxar Tiles
+ * High-Precision Geodetic Alignments, Real-Time NOTAMs & Closed Runway Highlighting
  */
 
 'use strict';
@@ -79,7 +79,6 @@ async function setupPrecisionMapbox() {
 
       currentMbLayer = getMapboxLayer(token);
       if (currentMbLayer) {
-        // Switch map to Mapbox Maxar High Precision Satellite
         map.eachLayer(l => {
           if (l instanceof L.TileLayer) map.removeLayer(l);
         });
@@ -104,10 +103,14 @@ let currentCoords  = null;
 
 // ── Marker Icon Factory ───────────────────────────────────────────────────────
 
-function pinIcon(onRunway) {
+function pinIcon(onRunway, isClosed) {
+  let cls = 'pin-marker';
+  if (isClosed) cls += ' closed-runway';
+  else if (onRunway) cls += ' on-runway';
+
   return L.divIcon({
     className: '',
-    html: `<div class="pin-marker ${onRunway ? 'on-runway' : ''}"></div>`,
+    html: `<div class="${cls}"></div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 28],
     popupAnchor: [0, -30]
@@ -164,16 +167,22 @@ function drawRunways(data) {
   for (const rwy of runwaysToDraw) {
     if (!rwy.le_latitude || !rwy.he_latitude) continue;
 
+    const isClosed = rwy.is_closed || (rwy.analysis && rwy.analysis.is_closed);
     const isActive = data.active_runway &&
       rwy.airport_icao === data.active_runway.airport_icao &&
       rwy.le_ident === data.active_runway.le_ident;
 
+    // Determine colors: Red for closed, Green for active touchdown, Blue for standard
+    let polyColor = isClosed ? '#ff4757' : (isActive ? (data.on_runway ? '#00ff88' : '#00d4ff') : 'rgba(0,212,255,0.45)');
+    let polyFill  = isClosed ? 'rgba(255, 71, 87, 0.35)' : (isActive ? (data.on_runway ? 'rgba(0,255,136,0.18)' : 'rgba(0,212,255,0.12)') : 'rgba(0,212,255,0.05)');
+    let lineColor = isClosed ? '#ff4757' : (isActive ? '#00ff88' : 'rgba(0,212,255,0.6)');
+
     // 1. Runway Surface Boundary Polygon
     const polyCoords = computeRunwayPolygon(rwy.le_latitude, rwy.le_longitude, rwy.he_latitude, rwy.he_longitude, rwy.width_ft);
     const poly = L.polygon(polyCoords, {
-      color: isActive ? (data.on_runway ? '#00ff88' : '#00d4ff') : 'rgba(0,212,255,0.45)',
-      weight: isActive ? 2.5 : 1,
-      fillColor: isActive ? (data.on_runway ? 'rgba(0,255,136,0.15)' : 'rgba(0,212,255,0.09)') : 'rgba(0,212,255,0.05)',
+      color: polyColor,
+      weight: isClosed ? 3 : (isActive ? 2.5 : 1),
+      fillColor: polyFill,
       fillOpacity: 1
     }).addTo(map);
     runwayLayers.push(poly);
@@ -182,29 +191,29 @@ function drawRunways(data) {
     const line = L.polyline(
       [[rwy.le_latitude, rwy.le_longitude], [rwy.he_latitude, rwy.he_longitude]],
       {
-        color: isActive ? '#00ff88' : 'rgba(0,212,255,0.6)',
+        color: lineColor,
         weight: isActive ? 4 : 2,
-        dashArray: isActive ? '8,6' : '6,6',
+        dashArray: isClosed ? '6,6' : (isActive ? '8,6' : '6,6'),
         opacity: 0.95
       }
     ).addTo(map);
     runwayLayers.push(line);
 
     // 3. Threshold Badges
+    const leBadgeHtml = isClosed
+      ? `<div style="background:#ff4757;color:#fff;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800;padding:3px 7px;border:1px solid #fff;border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(255,71,87,0.7);">🚫 RW ${rwy.le_ident} [CLSD]</div>`
+      : `<div style="background:rgba(10,13,20,0.9);color:#00d4ff;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:700;padding:3px 7px;border:1px solid rgba(0,212,255,0.6);border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.7);">${rwy.le_ident}</div>`;
+
+    const heBadgeHtml = isClosed
+      ? `<div style="background:#ff4757;color:#fff;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800;padding:3px 7px;border:1px solid #fff;border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(255,71,87,0.7);">🚫 RW ${rwy.he_ident} [CLSD]</div>`
+      : `<div style="background:rgba(10,13,20,0.9);color:#00d4ff;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:700;padding:3px 7px;border:1px solid rgba(0,212,255,0.6);border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.7);">${rwy.he_ident}</div>`;
+
     const leLabel = rwy.le_ident ? L.marker([rwy.le_latitude, rwy.le_longitude], {
-      icon: L.divIcon({
-        className: '',
-        html: `<div style="background:rgba(10,13,20,0.9);color:#00d4ff;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:700;padding:3px 7px;border:1px solid rgba(0,212,255,0.6);border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.7);">${rwy.le_ident}</div>`,
-        iconAnchor: [16, 12]
-      })
+      icon: L.divIcon({ className: '', html: leBadgeHtml, iconAnchor: [16, 12] })
     }).addTo(map) : null;
 
     const heLabel = rwy.he_ident ? L.marker([rwy.he_latitude, rwy.he_longitude], {
-      icon: L.divIcon({
-        className: '',
-        html: `<div style="background:rgba(10,13,20,0.9);color:#00d4ff;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:700;padding:3px 7px;border:1px solid rgba(0,212,255,0.6);border-radius:4px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.7);">${rwy.he_ident}</div>`,
-        iconAnchor: [16, 12]
-      })
+      icon: L.divIcon({ className: '', html: heBadgeHtml, iconAnchor: [16, 12] })
     }).addTo(map) : null;
 
     if (leLabel) runwayLayers.push(leLabel);
@@ -267,6 +276,52 @@ function fmt(n, decimals = 0) {
   return Number(n).toLocaleString(undefined, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals
+  });
+}
+
+function renderNotamsPanel(operational, icao) {
+  const notamsPanel = document.getElementById('notamsPanel');
+  const notamsContainer = document.getElementById('notamsContainer');
+  if (!operational || !operational.notams || operational.notams.length === 0) {
+    notamsPanel.classList.add('hidden');
+    return;
+  }
+
+  notamsPanel.classList.remove('hidden');
+  document.getElementById('notamsTitle').textContent = `${icao || ''} Active NOTAMs (${operational.notams.length})`;
+  notamsContainer.innerHTML = '';
+
+  // Sort: Closure NOTAMs first
+  const sorted = [...operational.notams].sort((a, b) => (b.is_closure ? 1 : 0) - (a.is_closure ? 1 : 0));
+
+  sorted.forEach(n => {
+    const item = document.createElement('div');
+    item.className = `notam-item ${n.is_closure ? 'notam-closure' : ''}`;
+
+    let badgeClass = 'general';
+    let badgeLabel = 'NOTAM';
+
+    if (n.type === 'RUNWAY_CLOSURE') {
+      badgeClass = 'closure';
+      badgeLabel = '🚫 RWY CLOSURE';
+    } else if (n.type === 'NAVAID_LIGHTING') {
+      badgeClass = 'navaid';
+      badgeLabel = '💡 NAVAID/LIGHT';
+    } else if (n.type === 'TAXIWAY_APRON') {
+      badgeClass = 'taxiway';
+      badgeLabel = '🚧 TAXIWAY';
+    } else if (n.type === 'HAZARD') {
+      badgeClass = 'hazard';
+      badgeLabel = '⚠️ HAZARD';
+    }
+
+    item.innerHTML = `
+      <div class="notam-item-header">
+        <span class="notam-badge ${badgeClass}">${badgeLabel}</span>
+      </div>
+      <div class="notam-text">${n.text}</div>
+    `;
+    notamsContainer.appendChild(item);
   });
 }
 
@@ -385,15 +440,15 @@ function updateResults(data) {
     const elevM = airport.elevation_m;
     document.getElementById('cardElev').textContent = elevFt !== null ? `${fmt(elevFt)} ft / ${fmt(elevM)} m` : '—';
 
-    // Source controls active label
     document.getElementById('activeSourceText').textContent = `Active: ${operational?.source_label || 'METAR'}`;
   } else {
     airportCard.classList.add('hidden');
     sourceControlPanel.classList.add('hidden');
   }
 
-  // 3. Render Feeds Panel in Sidebar
+  // 3. Render Feeds Panel & NOTAMs in Sidebar
   renderFeedsPanel(operational);
+  renderNotamsPanel(operational, airport?.icao);
 
   // 4. Popup notification attached directly to the Pin Drop
   if (pinMarker) {
@@ -409,6 +464,7 @@ function updateResults(data) {
     if (on_runway && rwy && rwy.analysis) {
       // ── RUNWAY ON-PIN NOTIFICATION CARD ──
       const a = rwy.analysis;
+      const isClosed = rwy.is_closed || a.is_closed;
       const rwyElevFt = a.elevation_ft !== null ? a.elevation_ft : airport?.elevation_ft;
       const rwyElevM = rwyElevFt !== null ? Math.round(rwyElevFt * 0.3048) : null;
       const rwyDimsStr = `${fmt(rwy.length_ft)} ft × ${fmt(rwy.width_ft)} ft (${fmt(rwy.length_m)} m × ${fmt(rwy.width_m)} m)`;
@@ -418,14 +474,24 @@ function updateResults(data) {
       const lndStr = operational?.landing_runways?.length > 0 ? operational.landing_runways.join(', ') : a.runway_end_ident;
       const depStr = operational?.departing_runways?.length > 0 ? operational.departing_runways.join(', ') : lndStr;
 
+      const activeBadgeHtml = isClosed
+        ? `<span class="rwy-active-badge closed">🚫 RW ${a.runway_end_ident} CLOSED</span>`
+        : `<span class="rwy-active-badge">🛬 RW ${a.runway_end_ident}</span>`;
+
+      const closedNoticeHtml = isClosed
+        ? `<div class="closed-rwy-notice">⚠️ RW ${a.runway_end_ident} CLOSED (NOTAM)</div>`
+        : '';
+
       const popupHtml = `
         <div class="pin-popup-card runway-popup">
           <div class="pin-popup-badge-row">
-            <span class="rwy-active-badge">🛬 RW ${a.runway_end_ident}</span>
+            ${activeBadgeHtml}
             <span class="rwy-source-badge">${sourceTag}</span>
           </div>
           <div class="pin-popup-name">${airport ? airport.icao + ' &bull; ' + airport.name : rwy.airport_icao}</div>
           
+          ${closedNoticeHtml}
+
           <div class="pin-popup-op-strip">
             <div class="op-row">
               <span class="op-label">🛬 Landing:</span>
@@ -512,9 +578,16 @@ function updateResults(data) {
   banner.classList.remove('hidden', 'on-runway', 'off-runway', 'near-runway');
 
   if (on_runway && rwy) {
-    banner.classList.add('on-runway');
-    icon.textContent = '✅';
-    text.textContent = `On Runway ${rwy.analysis?.runway_end_ident || ''} (${operational?.source_label || 'Active'})`;
+    const isClosed = rwy.is_closed || (rwy.analysis && rwy.analysis.is_closed);
+    if (isClosed) {
+      banner.classList.add('off-runway');
+      icon.textContent = '🚫';
+      text.textContent = `On Closed Runway ${rwy.analysis?.runway_end_ident || ''} (NOTAM)`;
+    } else {
+      banner.classList.add('on-runway');
+      icon.textContent = '✅';
+      text.textContent = `On Runway ${rwy.analysis?.runway_end_ident || ''} (${operational?.source_label || 'Active'})`;
+    }
   } else if (within_runway_scope && rwy) {
     banner.classList.add('near-runway');
     icon.textContent = '⚠️';
@@ -533,13 +606,15 @@ function updateResults(data) {
   const runwayPanel = document.getElementById('runwayPanel');
   if (within_runway_scope && rwy) {
     const a = rwy.analysis;
+    const isClosed = rwy.is_closed || a.is_closed;
     runwayPanel.classList.remove('hidden');
 
     document.getElementById('runwayTitle').textContent =
-      `${rwy.airport_icao} — Runway ${rwy.le_ident || '?'}/${rwy.he_ident || '?'}`;
+      `${rwy.airport_icao} — Runway ${rwy.le_ident || '?'}/${rwy.he_ident || '?'}${isClosed ? ' [CLOSED]' : ''}`;
 
-    document.getElementById('runwayDesignator').textContent =
-      `Landing ${a.runway_end_ident} (${operational?.source_label || ''})`;
+    document.getElementById('runwayDesignator').textContent = isClosed
+      ? `RW ${a.runway_end_ident} (CLOSED BY NOTAM)`
+      : `Landing ${a.runway_end_ident} (${operational?.source_label || ''})`;
     document.getElementById('runwaySurface').textContent =
       rwy.surface ? rwy.surface.charAt(0).toUpperCase() + rwy.surface.slice(1) : '—';
     document.getElementById('runwayDims').textContent =
@@ -606,12 +681,16 @@ function updateResults(data) {
     document.getElementById('nearbyTitle').textContent = airport ? `${airport.icao} Runways (${runways.length})` : 'Airport Runways';
     
     runways.forEach((n) => {
+      const isClosed = n.is_closed || (n.analysis && n.analysis.is_closed);
       const isActive = rwy && n.airport_icao === rwy.airport_icao && n.le_ident === rwy.le_ident;
       const item = document.createElement('div');
-      item.className = 'nearby-item' + (isActive ? ' active' : '');
+      item.className = 'nearby-item' + (isActive ? ' active' : '') + (isClosed ? ' closed-item' : '');
+      
+      const closedTag = isClosed ? ` <span style="background:#ff4757;color:#fff;font-size:9.5px;padding:1px 5px;border-radius:3px;font-weight:800;margin-left:4px;">CLOSED</span>` : '';
+
       item.innerHTML = `
         <div>
-          <div class="nearby-ident">RW ${n.le_ident || '?'}/${n.he_ident || '?'}</div>
+          <div class="nearby-ident">RW ${n.le_ident || '?'}/${n.he_ident || '?'}${closedTag}</div>
           <div class="nearby-airport">${fmt(n.length_ft)} ft × ${fmt(n.width_ft)} ft &bull; ${n.surface || 'Paved'}</div>
         </div>
         <div class="nearby-dist">${n.centerline_bearing_deg || 0}&deg;</div>
@@ -664,7 +743,8 @@ async function analyzePoint(lat, lon) {
     drawRunways(data);
 
     if (pinMarker) {
-      pinMarker.setIcon(pinIcon(data.on_runway));
+      const isClosed = data.active_runway && (data.active_runway.is_closed || data.active_runway.analysis?.is_closed);
+      pinMarker.setIcon(pinIcon(data.on_runway, isClosed));
     }
 
   } catch (err) {
@@ -708,7 +788,7 @@ map.on('click', (e) => {
     pinMarker.setLatLng([lat, lng]);
   } else {
     pinMarker = L.marker([lat, lng], {
-      icon: pinIcon(false),
+      icon: pinIcon(false, false),
       draggable: true
     }).addTo(map);
 
@@ -750,4 +830,4 @@ document.getElementById('airportSearch').addEventListener('keydown', (e) => {
 
 initSourceControls();
 showLoading(false);
-console.log('🛬 ICAO Runway Analyzer ready.');
+console.log('🛬 ICAO Runway Analyzer ready with NOTAMs integration.');

@@ -210,6 +210,66 @@ function parseWindFromText(text) {
     return { dir: null, speed: null, gust: null };
 }
 
+
+// ── NOTAM & Runway Closure Parser ─────────────────────────────────────────────
+
+function parseAirportNotams(atisText) {
+    if (!atisText) return { closedRunways: [], notams: [] };
+    
+    const closedRunways = new Set();
+    const notams = [];
+
+    const notamIdx = atisText.indexOf('NOTAMS');
+    const body = notamIdx !== -1 ? atisText.slice(notamIdx).replace(/^NOTAMS?\.?\s*/i, '') : atisText;
+    if (!body) return { closedRunways: [], notams: [] };
+
+    const sentences = body.split(/(?:\.{1,3}|;)\s+/);
+    for (let s of sentences) {
+        s = s.trim().replace(/^\.+/, '').trim();
+        if (!s || s.length < 5) continue;
+
+        let type = 'GENERAL';
+        let isClosure = false;
+
+        // Taxiway closures should not trigger runway closure
+        if (/\b(?:TAXIWAY|TWY|APRON|RAMP)\b/i.test(s) && /\b(?:CLSD|CLOSED)\b/i.test(s)) {
+            type = 'TAXIWAY_APRON';
+        } 
+        // Strict Runway Closure: 'RWY 04/22 CLSD', 'RWY 13 CLOSED', 'RUNWAY 22L OUT OF SERVICE'
+        else if (/\b(?:RWY|RY|RUNWAY)\s*([0-9]{1,2}[LCR]?(?:\s*\/\s*[0-9]{1,2}[LCR]?)?)\s+(?:CLSD|CLOSED|UNUSABLE|OUT OF SERVICE)\b/i.test(s) ||
+                 /\b(?:CLSD|CLOSED)\s+(?:RWY|RY|RUNWAY)\s*([0-9]{1,2}[LCR]?)\b/i.test(s)) {
+            type = 'RUNWAY_CLOSURE';
+            isClosure = true;
+
+            const matches = s.match(/\b(?:RWY|RY|RUNWAY)\s*([0-9]{1,2}[LCR]?(?:\s*\/\s*[0-9]{1,2}[LCR]?)?)\s+(?:CLSD|CLOSED|UNUSABLE|OUT OF SERVICE)\b/gi) || [];
+            for (const m of matches) {
+                const sub = m.match(/\b([0-9]{1,2}[LCR]?(?:\s*\/\s*[0-9]{1,2}[LCR]?)?)\b/);
+                if (sub && sub[1]) {
+                    const idents = sub[1].split('/');
+                    for (const id of idents) {
+                        const clean = id.trim().toUpperCase().replace(/^0+/, '');
+                        if (clean) closedRunways.add(clean);
+                    }
+                }
+            }
+        } else if (/\b(?:PAPI|VASI|ILS|ALS|LIGHTS|LIGHTING|REIL|GLIDESLOPE|LOC|OTS)\b/i.test(s)) {
+            type = 'NAVAID_LIGHTING';
+        } else if (/\b(?:TAXIWAY|TWY|APRON|RAMP)\b/i.test(s)) {
+            type = 'TAXIWAY_APRON';
+        } else if (/\b(?:LASER|BIRDS|WILDLIFE|CRANE|OBST|SWAP)\b/i.test(s)) {
+            type = 'HAZARD';
+        }
+
+        notams.push({
+            type,
+            text: s,
+            is_closure: isClosure
+        });
+    }
+
+    return { closedRunways: Array.from(closedRunways), notams };
+}
+
 // ── Multi-Source Operational Intelligence Cache ───────────────────────────────
 
 const multiSourceCache = {}; // ICAO -> { timestamp, sources }
@@ -357,6 +417,8 @@ function resolveActiveOperational(sources, userPref = 'real_world') {
     const windSpeed = activeSrc.wind_speed ?? sources.metar?.wind_speed ?? null;
     const windGust = activeSrc.wind_gust ?? sources.metar?.wind_gust ?? null;
 
+    const notamResult = parseAirportNotams(activeSrc.text || sources.real_world?.text || sources.vatsim?.text || '');
+
     return {
         selected_preference: userPref,
         active_source_type: activeSrc.type,
@@ -370,6 +432,8 @@ function resolveActiveOperational(sources, userPref = 'real_world') {
         wind_dir: windDir,
         wind_speed: windSpeed,
         wind_gust: windGust,
+        closed_runways: notamResult.closedRunways,
+        notams: notamResult.notams,
         all_sources: sources
     };
 }
@@ -476,7 +540,21 @@ function analyzeRunwayLanding(lat, lon, rwy, operationalCtx, airportElev) {
         chosenEnd = (chosenEnd === 'le') ? 'he' : 'le';
     }
 
-    return endMetrics[chosenEnd];
+    const chosenMetrics = endMetrics[chosenEnd];
+    const leNum = (rwy.le_ident || '').toUpperCase().replace(/^0+/, '');
+    const heNum = (rwy.he_ident || '').toUpperCase().replace(/^0+/, '');
+    const isClosedNotam = operationalCtx && operationalCtx.closed_runways && 
+        (operationalCtx.closed_runways.includes(leNum) || operationalCtx.closed_runways.includes(heNum));
+    
+    let closureReason = null;
+    if (isClosedNotam && operationalCtx.notams) {
+        const matching = operationalCtx.notams.find(n => n.is_closure);
+        if (matching) closureReason = matching.text;
+    }
+
+    chosenMetrics.is_closed = !!isClosedNotam;
+    chosenMetrics.closure_reason = closureReason;
+    return chosenMetrics;
 }
 
 // ── Spatial Lookup Helpers ───────────────────────────────────────────────────
@@ -608,6 +686,8 @@ app.post('/api/analyze', async (req, res) => {
             he_longitude: rwy.he_longitude,
             centerline_bearing_deg: rwy.centerline_bearing_deg,
             dist_to_midpoint_m: Math.round(dist),
+            is_closed: result.is_closed,
+            closure_reason: result.closure_reason,
             analysis: result
         });
     }
