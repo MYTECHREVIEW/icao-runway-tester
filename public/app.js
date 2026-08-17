@@ -1360,10 +1360,10 @@ async function drawAirportTerminals(data) {
       autoPan: true,
       zIndexOffset: 1500,
       icon: L.divIcon({
-        className: 'bay-icon-wrapper',
+        className: 'aviation-sign-icon',
         html: badgeHtml,
-        iconSize: [28, 20],
-        iconAnchor: [14, 10]
+        iconSize: null,
+        iconAnchor: [0, 0]
       })
     });
 
