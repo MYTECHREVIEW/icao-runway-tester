@@ -509,9 +509,6 @@ app.get('/api/config', (req, res) => {
 });
 
 
-});
-
-
 /**
  * POST /api/analyze
  * Body: { lat, lon, preferredSource: 'real_world' | 'vatsim' | 'ivao' | 'metar' }
