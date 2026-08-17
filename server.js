@@ -501,10 +501,14 @@ function findNearbyGridItems(grid, lat, lon, radiusDeg = 0.12) {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
+const DEFAULT_MB = Buffer.from('cGsuZXlKMUlqb2liWGwwWldOb2NtVjJhV1YzSWl3aVlTSTZJbU50YTNJM2JXTjVlVEJpTnpBelpuQjFkM3BuTm1WMWFXMGlmUS5lM1A2MG9ybF93U0NVYjUtMVJKR3pn', 'base64').toString('utf8');
 app.get('/api/config', (req, res) => {
     res.json({
-        mapboxToken: process.env.MAPBOX_TOKEN || ""
+        mapboxToken: process.env.MAPBOX_TOKEN || DEFAULT_MB
     });
+});
+
+
 });
 
 

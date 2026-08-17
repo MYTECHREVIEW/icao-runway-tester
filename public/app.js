@@ -1,39 +1,35 @@
 /**
  * app.js — Runway Analyzer Map Frontend
- * Multi-Source ATIS/METAR Suite with User Source Controls & Fallbacks
+ * High-Precision Geodetic Alignments with Auto-Configured Mapbox Maxar Tiles
  */
 
 'use strict';
 
-// ── Storage Keys ──────────────────────────────────────────────────────────────
 const MAPBOX_STORAGE_KEY = 'icao_mapbox_token';
 const SOURCE_PREF_KEY = 'icao_atis_source_pref';
 
 let mapboxToken = localStorage.getItem(MAPBOX_STORAGE_KEY) || '';
 let userSourcePref = localStorage.getItem(SOURCE_PREF_KEY) || 'real_world';
 
-// ── Tile Layers (Pure Clean Satellite — No labels or street clutter) ──────────
+// ── Tile Layers ───────────────────────────────────────────────────────────────
 
-function createMapboxLayers(token) {
+function getMapboxLayer(token) {
   if (!token) return null;
-  return {
-    mapboxSat: L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${token}`, {
-      attribution: '&copy; Mapbox &copy; Maxar',
-      maxZoom: 22,
-      tileSize: 512,
-      zoomOffset: -1
-    })
-  };
+  return L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${token}`, {
+    attribution: '&copy; Mapbox &copy; Maxar',
+    maxZoom: 22,
+    tileSize: 512,
+    zoomOffset: -1
+  });
 }
 
-const mb = createMapboxLayers(mapboxToken);
+const fallbackGoogle = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+  attribution: '&copy; Google Maps (Clean Satellite)',
+  maxZoom: 21
+});
 
 const TILES = {
-  mapboxClean: mb ? mb.mapboxSat : L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 21 }),
-  googleSat: L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-    attribution: '&copy; Google Maps (Clean Satellite)',
-    maxZoom: 21
-  }),
+  googleSat: fallbackGoogle,
   usgs: L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}', {
     attribution: '&copy; USGS National Map (Clean Orthoimagery)',
     maxZoom: 20
@@ -53,17 +49,50 @@ const TILES = {
 const map = L.map('map', {
   center: [40.777, -73.872],  // Default: KLGA
   zoom: 16,
-  layers: [TILES.mapboxClean], // Pure Clean Satellite by default
+  layers: [fallbackGoogle],
   zoomControl: true
 });
 
-L.control.layers({
-  '💎 Mapbox Clean Satellite (No Labels)': TILES.mapboxClean,
-  '🛰 Google Clean Satellite (No Labels)': TILES.googleSat,
-  '🇺🇸 USGS Orthoimagery (No Labels)': TILES.usgs,
-  '🛰 Esri World Imagery (No Labels)': TILES.esri,
+let currentMbLayer = null;
+let layerControl = L.control.layers({
+  '🛰 Google Clean Satellite': TILES.googleSat,
+  '🇺🇸 USGS Orthoimagery': TILES.usgs,
+  '🛰 Esri World Imagery': TILES.esri,
   '🌑 Dark Map (No Labels)': TILES.dark
 }, {}, { position: 'bottomright' }).addTo(map);
+
+// ── Fetch Server Config & Apply High-Precision Mapbox Tiles ───────────────────
+
+async function setupPrecisionMapbox() {
+  try {
+    const res = await fetch('/api/config');
+    const cfg = await res.json();
+    const token = cfg.mapboxToken || mapboxToken;
+    if (token) {
+      mapboxToken = token;
+      localStorage.setItem(MAPBOX_STORAGE_KEY, token);
+
+      if (currentMbLayer) {
+        map.removeLayer(currentMbLayer);
+        layerControl.removeLayer(currentMbLayer);
+      }
+
+      currentMbLayer = getMapboxLayer(token);
+      if (currentMbLayer) {
+        // Switch map to Mapbox Maxar High Precision Satellite
+        map.eachLayer(l => {
+          if (l instanceof L.TileLayer) map.removeLayer(l);
+        });
+        currentMbLayer.addTo(map);
+        layerControl.addBaseLayer(currentMbLayer, '💎 Mapbox Maxar High-Precision Satellite');
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch server config:', e);
+  }
+}
+
+setupPrecisionMapbox();
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -255,7 +284,6 @@ function renderFeedsPanel(operational) {
   const sources = operational.all_sources;
   const activeType = operational.active_source_type;
 
-  // Render order: Real ATIS, VATSIM, IVAO, METAR
   const srcList = [
     { key: 'real_world', title: 'Real World D-ATIS', icon: '📡', data: sources.real_world },
     { key: 'vatsim',     title: 'VATSIM Network ATIS', icon: '🌐', data: sources.vatsim },
@@ -662,7 +690,6 @@ function initSourceControls() {
       userSourcePref = p.dataset.source;
       localStorage.setItem(SOURCE_PREF_KEY, userSourcePref);
 
-      // If a pin is already active, re-analyze with the new source preference
       if (currentCoords) {
         analyzePoint(currentCoords.lat, currentCoords.lon);
       }
