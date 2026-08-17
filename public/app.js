@@ -11,7 +11,7 @@ const SHOW_TAXIWAYS_KEY = 'icao_show_taxiways';
 
 let mapboxToken = localStorage.getItem(MAPBOX_STORAGE_KEY) || '';
 let userSourcePref = localStorage.getItem(SOURCE_PREF_KEY) || 'real_world';
-let showTaxiways = localStorage.getItem(SHOW_TAXIWAYS_KEY) !== 'false';
+let showTaxiways = localStorage.getItem(SHOW_TAXIWAYS_KEY) === 'true'; // OFF by default
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -62,7 +62,7 @@ const taxiwayLayerGroup = L.layerGroup();
 const map = L.map('map', {
   center: [40.777, -73.872],  // Default: KLGA
   zoom: 16,
-  layers: [fallbackGoogle, taxiwayLayerGroup],
+  layers: showTaxiways ? [fallbackGoogle, taxiwayLayerGroup] : [fallbackGoogle],
   zoomControl: true
 });
 

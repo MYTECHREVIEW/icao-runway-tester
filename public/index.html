@@ -33,7 +33,7 @@
       </div>
     </div>
 
-    <!-- Instruction -->
+    <!-- Initial Instruction / Help (Hidden once pin is placed) -->
     <div class="instruction-card" id="instructionCard">
       <div class="instruction-icon">📍</div>
       <div class="instruction-text">
@@ -41,19 +41,19 @@
       </div>
     </div>
 
-    <!-- Loading -->
+    <!-- Loading State -->
     <div class="loading-card hidden" id="loadingCard">
       <div class="spinner"></div>
-      <span>Analyzing position &amp; weather feeds...</span>
+      <span>Analyzing position &amp; operational feeds...</span>
     </div>
 
-    <!-- Coordinates display -->
+    <!-- 1. Pin GPS Coordinates -->
     <div class="coords-card hidden" id="coordsCard">
-      <div class="coords-label">📌 Pin Location</div>
+      <div class="coords-label">📌 Pin GPS Coordinates</div>
       <div class="coords-value" id="coordsValue">—</div>
     </div>
 
-    <!-- ── Airport Info Card ───────────────────────────────────────────── -->
+    <!-- 2. ICAO Airport Info -->
     <div class="airport-card hidden" id="airportCard">
       <div class="airport-header">
         <div class="airport-badges">
@@ -69,49 +69,25 @@
       <div class="airport-location" id="cardLocation">—</div>
     </div>
 
-    <!-- ── ATIS / Weather Source Control Panel ──────────────────────────── -->
-    <div class="panel hidden" id="sourceControlPanel">
+    <!-- 3. Airport Runways Info -->
+    <div class="panel hidden" id="nearbyPanel">
       <div class="panel-header">
-        <span class="panel-icon">📻</span>
-        <span class="panel-title">ATIS / Weather Source</span>
+        <span class="panel-icon">🛫</span>
+        <span class="panel-title" id="nearbyTitle">Airport Runways</span>
       </div>
-      <div class="panel-body">
-        <div class="source-selector-title">Preferred Primary Source:</div>
-        <div class="source-pills-row" id="sourceSelector">
-          <button class="source-pill active" data-source="real_world">Real ATIS</button>
-          <button class="source-pill" data-source="vatsim">VATSIM</button>
-          <button class="source-pill" data-source="ivao">IVAO</button>
-          <button class="source-pill" data-source="metar">METAR</button>
-        </div>
-        <div class="active-source-indicator" id="activeSourceIndicator">
-          <span class="indicator-dot"></span>
-          <span id="activeSourceText">Active: Real World D-ATIS</span>
-        </div>
-      </div>
+      <div class="nearby-list" id="nearbyList"></div>
     </div>
 
-    <!-- On-Runway Status Banner -->
+    <!-- 4. Telemetry Info from Runway Pin Location -->
     <div class="status-banner hidden" id="statusBanner">
       <span class="status-icon" id="statusIcon"></span>
       <span class="status-text" id="statusText"></span>
     </div>
 
-    <!-- ── Full Multi-Source ATIS & METAR Feed Panel ────────────────────── -->
-    <div class="panel hidden" id="atisFeedsPanel">
-      <div class="panel-header">
-        <span class="panel-icon">📡</span>
-        <span class="panel-title">Airport Weather &amp; ATIS Feeds</span>
-      </div>
-      <div class="panel-body feeds-body" id="feedsContainer">
-        <!-- Injected via JavaScript -->
-      </div>
-    </div>
-
-    <!-- ── Runway Measurement Panel (Shown ONLY when on/near runway) ────── -->
     <div class="panel hidden" id="runwayPanel">
       <div class="panel-header">
         <span class="panel-icon">🛬</span>
-        <span class="panel-title" id="runwayTitle">—</span>
+        <span class="panel-title" id="runwayTitle">Runway Telemetry</span>
       </div>
       <div class="panel-body">
 
@@ -191,16 +167,39 @@
       </div>
     </div>
 
-    <!-- ── Airport Runways List (Filtered strictly to this airport) ──────── -->
-    <div class="panel hidden" id="nearbyPanel">
+    <!-- 5. Weather ATIS Source -->
+    <div class="panel hidden" id="sourceControlPanel">
       <div class="panel-header">
-        <span class="panel-icon">🛫</span>
-        <span class="panel-title" id="nearbyTitle">Airport Runways</span>
+        <span class="panel-icon">📻</span>
+        <span class="panel-title">Weather ATIS Source</span>
       </div>
-      <div class="nearby-list" id="nearbyList"></div>
+      <div class="panel-body">
+        <div class="source-selector-title">Preferred Primary Source:</div>
+        <div class="source-pills-row" id="sourceSelector">
+          <button class="source-pill active" data-source="real_world">Real ATIS</button>
+          <button class="source-pill" data-source="vatsim">VATSIM</button>
+          <button class="source-pill" data-source="ivao">IVAO</button>
+          <button class="source-pill" data-source="metar">METAR</button>
+        </div>
+        <div class="active-source-indicator" id="activeSourceIndicator">
+          <span class="indicator-dot"></span>
+          <span id="activeSourceText">Active: Real World D-ATIS</span>
+        </div>
+      </div>
     </div>
 
-    <!-- ── Airport NOTAMs Panel ─────────────────────────────────────────── -->
+    <!-- 6. Weather ATIS Info -->
+    <div class="panel hidden" id="atisFeedsPanel">
+      <div class="panel-header">
+        <span class="panel-icon">📡</span>
+        <span class="panel-title">Weather ATIS Info</span>
+      </div>
+      <div class="panel-body feeds-body" id="feedsContainer">
+        <!-- Injected via JavaScript -->
+      </div>
+    </div>
+
+    <!-- 7. NOTAMS -->
     <div class="panel hidden" id="notamsPanel">
       <div class="panel-header">
         <span class="panel-icon">⚠️</span>
@@ -211,11 +210,11 @@
       </div>
     </div>
 
-    <!-- ── Map Layers & Display Settings ──────────────────────────────── -->
+    <!-- 8. Taxiways Toggle (OFF by default) -->
     <div class="panel" id="displaySettingsPanel">
       <div class="panel-header">
-        <span class="panel-icon">🗺️</span>
-        <span class="panel-title">Map Layers &amp; Overlays</span>
+        <span class="panel-icon">🚖</span>
+        <span class="panel-title">Taxiway Layer</span>
       </div>
       <div class="panel-body">
         <div class="toggle-row">
@@ -227,7 +226,7 @@
             </div>
           </div>
           <label class="switch">
-            <input type="checkbox" id="taxiwayToggle" checked />
+            <input type="checkbox" id="taxiwayToggle" />
             <span class="slider"></span>
           </label>
         </div>
