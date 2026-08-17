@@ -737,6 +737,14 @@
         "lat": 40.77285664567935,
         "lon": -73.8665033876896,
         "lead_in_coords": null
+      },
+      {
+        "id": 61000082,
+        "ref": "8A",
+        "name": "Gate 8A",
+        "lat": 40.77427799697614,
+        "lon": -73.8666857779026,
+        "lead_in_coords": null
       }
     ],
     "stands": [
@@ -1563,6 +1571,15 @@
         "max_wingspan_m": null,
         "lat": 40.77285664567935,
         "lon": -73.8665033876896,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10000082,
+        "ref": "8A",
+        "name": "Stand 8A",
+        "max_wingspan_m": null,
+        "lat": 40.77427799697614,
+        "lon": -73.8666857779026,
         "lead_in_coords": null
       }
     ],
@@ -2720,6 +2737,20 @@
         "lon": -73.8665033876896,
         "jetbridge_lat": 40.77285664567935,
         "jetbridge_lon": -73.8665033876896,
+        "heading": 0,
+        "max_wingspan_m": null,
+        "lead_in_coords": null
+      },
+      {
+        "id": "bay_8A",
+        "ref": "8A",
+        "name": "Gate 8A",
+        "type": "gate",
+        "has_jetbridge": true,
+        "lat": 40.77427799697614,
+        "lon": -73.8666857779026,
+        "jetbridge_lat": 40.77427799697614,
+        "jetbridge_lon": -73.8666857779026,
         "heading": 0,
         "max_wingspan_m": null,
         "lead_in_coords": null

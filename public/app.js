@@ -75,7 +75,7 @@ let traceDotLayers = [];
 let hasUnsavedChanges = false;
 
 const SHOW_TERMINALS_KEY = 'icao_show_terminals_v1';
-let showTerminals = localStorage.getItem(SHOW_TERMINALS_KEY) !== 'false';
+let showTerminals = true;
 let showTerminalBuildings = true;
 let showGates = true;
 let showStands = true;
@@ -1578,6 +1578,82 @@ function applyBayEdits() {
 }
 window.applyBayEdits = applyBayEdits;
 
+
+// ── Magnetic Vertex Snapping Engine ───────────────────────────────────────────
+
+function findMagneticSnapPoint(lat, lon, excludeSeg = null, excludeVIdx = -1, thresholdMeters = 12.0) {
+  let closest = null;
+  let minD = thresholdMeters;
+
+  // 1. Check all other taxiway vertices
+  const segments = Array.isArray(lastResult?.taxiways) ? lastResult.taxiways : (lastResult?.taxiways?.segments || []);
+  segments.forEach(seg => {
+    const coords = seg.coordinates || [];
+    coords.forEach((pt, idx) => {
+      if (seg === excludeSeg && idx === excludeVIdx) return;
+      const d = haversine(lat, lon, pt[0], pt[1]);
+      if (d < minD) {
+        minD = d;
+        closest = [pt[0], pt[1]];
+      }
+    });
+  });
+
+  // 2. Check all parking bay locations
+  (lastResult?.bays || []).forEach(b => {
+    if (b.lat && b.lon) {
+      const d = haversine(lat, lon, b.lat, b.lon);
+      if (d < minD) {
+        minD = d;
+        closest = [b.lat, b.lon];
+      }
+    }
+  });
+
+  return closest; // returns [lat, lon] if within threshold, else null
+}
+
+function joinTaxiwayToNearest() {
+  if (!selectedTaxiwayRef || !lastResult?.taxiways) {
+    showEditorToast('⚠️ Select a taxiway first.');
+    return;
+  }
+  const segments = Array.isArray(lastResult.taxiways) ? lastResult.taxiways : (lastResult.taxiways.segments || []);
+  const matching = segments.filter(s => s.ref && s.ref.toUpperCase().trim() === selectedTaxiwayRef);
+  if (matching.length === 0) return;
+
+  let snappedCount = 0;
+  matching.forEach(seg => {
+    const coords = seg.coordinates || [];
+    if (coords.length === 0) return;
+
+    // Check start vertex
+    const snapStart = findMagneticSnapPoint(coords[0][0], coords[0][1], seg, 0, 25.0);
+    if (snapStart) {
+      coords[0] = snapStart;
+      snappedCount++;
+    }
+
+    // Check end vertex
+    const lastIdx = coords.length - 1;
+    const snapEnd = findMagneticSnapPoint(coords[lastIdx][0], coords[lastIdx][1], seg, lastIdx, 25.0);
+    if (snapEnd) {
+      coords[lastIdx] = snapEnd;
+      snappedCount++;
+    }
+  });
+
+  if (snappedCount > 0) {
+    showEditorToast(`🔗 Magnetically joined ${snappedCount} endpoint(s) on ${selectedTaxiwayRef} with connecting lines!`);
+    saveTaxiwayChanges(true);
+    drawTaxiways(lastResult.taxiways);
+    renderTaxiwayVertexHandles();
+  } else {
+    showEditorToast('⚠️ No nearby connecting vertices found within 25m. Drag the vertex closer to snap.');
+  }
+}
+window.joinTaxiwayToNearest = joinTaxiwayToNearest;
+
 // ── Taxiway Routing & Ultra-Smooth Vertex Editor ─────────────────────────────
 
 function populateEditorTaxiwayDropdown(segments) {
@@ -1644,30 +1720,53 @@ function renderTaxiwayVertexHandles() {
     activeTaxiPolylines.push({ seg, poly });
 
     coords.forEach((pt, vIdx) => {
+      const isEndpoint = (vIdx === 0 || vIdx === coords.length - 1);
+
       const handleMarker = L.marker(pt, {
         draggable: true,
         autoPan: true,
         icon: L.divIcon({
           className: 'lead-in-handle-wrapper',
-          html: `<div class="taxi-vertex-handle" title="${seg.ref} Point ${vIdx + 1}"></div>`,
+          html: `<div class="taxi-vertex-handle ${isEndpoint ? 'handle-endpoint' : ''}" title="${seg.ref} Point ${vIdx + 1} ${isEndpoint ? '(Endpoint)' : ''}"></div>`,
           iconSize: [18, 18],
           iconAnchor: [9, 9]
         })
       });
 
-      // Smooth drag without destroying the marker!
+      // Smooth drag with Magnetic Auto-Snapping to nearby vertices!
       handleMarker.on('drag', (e) => {
-        const newCoord = [e.target.getLatLng().lat, e.target.getLatLng().lng];
-        seg.coordinates[vIdx] = newCoord;
+        let lat = e.target.getLatLng().lat;
+        let lng = e.target.getLatLng().lng;
+
+        // Magnetically snap if dragged near another vertex
+        const snap = findMagneticSnapPoint(lat, lng, seg, vIdx, 14.0);
+        if (snap) {
+          lat = snap[0];
+          lng = snap[1];
+        }
+
+        seg.coordinates[vIdx] = [lat, lng];
         poly.setLatLngs(seg.coordinates);
       });
 
       handleMarker.on('dragend', (e) => {
-        const newCoord = [e.target.getLatLng().lat, e.target.getLatLng().lng];
-        seg.coordinates[vIdx] = newCoord;
+        let lat = e.target.getLatLng().lat;
+        let lng = e.target.getLatLng().lng;
+
+        const snap = findMagneticSnapPoint(lat, lng, seg, vIdx, 14.0);
+        if (snap) {
+          lat = snap[0];
+          lng = snap[1];
+          handleMarker.setLatLng([lat, lng]);
+          showEditorToast(`🔗 Magnetically snapped and joined point to connecting taxiway!`);
+        } else {
+          showEditorToast(`📍 Moved ${seg.ref} vertex to ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+        }
+
+        seg.coordinates[vIdx] = [lat, lng];
         poly.setLatLngs(seg.coordinates);
-        showEditorToast(`📍 Moved ${seg.ref} vertex to ${newCoord[0].toFixed(6)}, ${newCoord[1].toFixed(6)}`);
         saveTaxiwayChanges(true);
+        drawTaxiways(lastResult.taxiways);
       });
 
       editorLayerGroup.addLayer(handleMarker);

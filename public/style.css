@@ -1928,3 +1928,9 @@ input:checked + .slider:before {
   cursor: grabbing !important;
   transform: scale(1.5) !important;
 }
+
+.taxi-vertex-handle.handle-endpoint {
+  background: #facc15 !important;
+  border-color: #ffffff !important;
+  box-shadow: 0 0 14px rgba(250, 204, 21, 0.9), 0 0 4px #000 !important;
+}
