@@ -1303,103 +1303,7 @@ input:checked + .slider:before {
   pointer-events: none;
 }
 
-.bay-badge {
-  background: rgba(10, 15, 25, 0.94);
-  backdrop-filter: blur(4px);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 800;
-  padding: 1px 5px;
-  border-radius: 3px;
-  white-space: nowrap;
-  text-align: center;
-  user-select: none;
-  cursor: default;
-  transition: all 0.15s ease;
-}
 
-.bay-badge.gate {
-  border: 1.5px solid #c084fc;
-  color: #f3e8ff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7), 0 0 6px rgba(192, 132, 252, 0.4);
-}
-
-.bay-badge.gate:hover {
-  transform: scale(1.25);
-  border-color: #e879f9;
-  background: #581c87;
-  color: #ffffff;
-  box-shadow: 0 0 14px rgba(232, 121, 249, 0.9);
-  z-index: 1000 !important;
-}
-
-.bay-badge.stand {
-  border: 1.5px solid #eab308;
-  color: #fef08a;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7), 0 0 6px rgba(234, 179, 8, 0.4);
-}
-
-.bay-badge.stand:hover {
-  transform: scale(1.25);
-  border-color: #fde047;
-  background: #713f12;
-  color: #ffffff;
-  box-shadow: 0 0 14px rgba(250, 204, 21, 0.9);
-  z-index: 1000 !important;
-}
-
-.layer-pill {
-  transition: all 0.15s ease;
-  user-select: none;
-}
-
-.layer-pill.inactive {
-  opacity: 0.45;
-  background: rgba(255, 255, 255, 0.04) !important;
-  color: var(--text-muted) !important;
-  border-color: var(--border) !important;
-}
-
-
-/* ── Visual Editor Mode Styles ─────────────────────────────────────────────── */
-
-.btn-editor-toggle:hover {
-  background: rgba(56, 189, 248, 0.25) !important;
-  border-color: #38bdf8 !important;
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
-}
-
-.btn-editor-toggle.active {
-  background: #0284c7 !important;
-  color: #ffffff !important;
-  border-color: #38bdf8 !important;
-  box-shadow: 0 0 16px rgba(56, 189, 248, 0.6);
-}
-
-.floating-editor-bar {
-  position: absolute;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1200;
-  background: rgba(10, 15, 25, 0.95);
-  backdrop-filter: blur(12px);
-  border: 1.5px solid rgba(56, 189, 248, 0.5);
-  border-radius: var(--radius-md);
-  padding: 8px 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8), 0 0 20px rgba(56, 189, 248, 0.3);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 480px;
-  max-width: 90vw;
-  animation: slideDown 0.25s ease-out;
-}
-
-@keyframes slideDown {
-  from { opacity: 0; transform: translate(-50%, -15px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
-}
 
 .editor-bar-header {
   display: flex;
@@ -1948,4 +1852,76 @@ input:checked + .slider:before {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
+}
+
+
+/* ── ULTRA-PROMINENT AVIATION GATE & STAND BADGES ──────────────────────────── */
+
+.bay-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: max-content !important;
+  max-width: none !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.5px !important;
+  padding: 2px 7px !important;
+  border-radius: 4px !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+  user-select: none !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.9), 0 0 10px rgba(192, 132, 252, 0.5) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8) !important;
+  transform: translate(-50%, -50%) !important;
+  pointer-events: auto !important;
+  z-index: 2500 !important;
+}
+
+.bay-badge.gate {
+  background: #3b0764 !important;
+  color: #f5d0fe !important;
+  border: 2px solid #c084fc !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.9), 0 0 14px rgba(192, 132, 252, 0.8) !important;
+}
+
+.bay-badge.gate:hover {
+  transform: translate(-50%, -50%) scale(1.35) !important;
+  border-color: #f0abfc !important;
+  background: #581c87 !important;
+  color: #ffffff !important;
+  z-index: 3500 !important;
+}
+
+.bay-badge.stand {
+  background: #713f12 !important;
+  color: #fef08a !important;
+  border: 2px solid #facc15 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.9), 0 0 14px rgba(250, 204, 21, 0.8) !important;
+}
+
+.bay-badge.stand:hover {
+  transform: translate(-50%, -50%) scale(1.35) !important;
+  border-color: #fef08a !important;
+  background: #854d0e !important;
+  color: #ffffff !important;
+  z-index: 3500 !important;
+}
+
+.bay-badge.editing {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 18px #38bdf8, 0 4px 14px #000 !important;
+  cursor: grab !important;
+  transform: translate(-50%, -50%) scale(1.2) !important;
+}
+
+.bay-badge.editing.selected {
+  border-color: #fde047 !important;
+  background: #ca8a04 !important;
+  color: #000000 !important;
+  box-shadow: 0 0 24px #fde047, 0 4px 14px #000 !important;
+  transform: translate(-50%, -50%) scale(1.4) !important;
+  z-index: 4000 !important;
 }
