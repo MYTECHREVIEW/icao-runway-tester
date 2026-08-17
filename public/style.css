@@ -1934,3 +1934,18 @@ input:checked + .slider:before {
   border-color: #ffffff !important;
   box-shadow: 0 0 14px rgba(250, 204, 21, 0.9), 0 0 4px #000 !important;
 }
+
+
+/* ── Bay Icon Wrapper (transparent Leaflet container) ──────────────────────── */
+
+.bay-icon-wrapper {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.lead-in-handle-wrapper {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
