@@ -243,7 +243,20 @@
         "name": "Gate 51",
         "lat": 40.7731742,
         "lon": -73.868132,
-        "lead_in_coords": null
+        "lead_in_coords": [
+          [
+            40.77342539297006,
+            -73.86770233511925
+          ],
+          [
+            40.773791013657465,
+            -73.86658385396005
+          ],
+          [
+            40.77380040805142,
+            -73.86655736714603
+          ]
+        ]
       },
       {
         "id": 61000021,
@@ -716,6 +729,14 @@
         "lat": 40.7752178,
         "lon": -73.8719616,
         "lead_in_coords": null
+      },
+      {
+        "id": 61000081,
+        "ref": "9B",
+        "name": "Gate 9B",
+        "lat": 40.77285664567935,
+        "lon": -73.8665033876896,
+        "lead_in_coords": null
       }
     ],
     "stands": [
@@ -978,9 +999,22 @@
         "ref": "51",
         "name": "Stand 51",
         "max_wingspan_m": null,
-        "lat": 40.7731742,
-        "lon": -73.868132,
-        "lead_in_coords": null
+        "lat": 40.77342539297006,
+        "lon": -73.86770233511925,
+        "lead_in_coords": [
+          [
+            40.77342539297006,
+            -73.86770233511925
+          ],
+          [
+            40.773791013657465,
+            -73.86658385396005
+          ],
+          [
+            40.77380040805142,
+            -73.86655736714603
+          ]
+        ]
       },
       {
         "id": 10000021,
@@ -1521,6 +1555,15 @@
         "lat": 40.7734311,
         "lon": -73.8847606,
         "lead_in_coords": null
+      },
+      {
+        "id": 10000081,
+        "ref": "9B",
+        "name": "Stand 9B",
+        "max_wingspan_m": null,
+        "lat": 40.77285664567935,
+        "lon": -73.8665033876896,
+        "lead_in_coords": null
       }
     ],
     "bays": [
@@ -1866,12 +1909,26 @@
         "name": "Gate 51",
         "type": "gate",
         "has_jetbridge": true,
-        "lat": 40.7731742,
-        "lon": -73.868132,
+        "lat": 40.77342539297006,
+        "lon": -73.86770233511925,
         "jetbridge_lat": 40.7731742,
         "jetbridge_lon": -73.868132,
         "heading": 0,
-        "max_wingspan_m": null
+        "max_wingspan_m": null,
+        "lead_in_coords": [
+          [
+            40.77342539297006,
+            -73.86770233511925
+          ],
+          [
+            40.773791013657465,
+            -73.86658385396005
+          ],
+          [
+            40.77380040805142,
+            -73.86655736714603
+          ]
+        ]
       },
       {
         "id": "bay_45",
@@ -2652,32 +2709,20 @@
         "jetbridge_lon": null,
         "heading": 0,
         "max_wingspan_m": null
-      }
-    ],
-    "hold_points": [
-      {
-        "id": "hp_b1",
-        "shape": "triangle",
-        "ref": "B1",
-        "name": "Hold Short B1",
-        "lat": 40.7765,
-        "lon": -73.871
       },
       {
-        "id": "hp_04",
-        "shape": "square",
-        "ref": "04-22",
-        "name": "Runway Hold 04-22",
-        "lat": 40.7758,
-        "lon": -73.8725
-      },
-      {
-        "id": "hp_cat2",
-        "shape": "circle",
-        "ref": "CAT II",
-        "name": "ILS Critical Area",
-        "lat": 40.775,
-        "lon": -73.873
+        "id": "bay_9B",
+        "ref": "9B",
+        "name": "Gate 9B",
+        "type": "gate",
+        "has_jetbridge": true,
+        "lat": 40.77285664567935,
+        "lon": -73.8665033876896,
+        "jetbridge_lat": 40.77285664567935,
+        "jetbridge_lon": -73.8665033876896,
+        "heading": 0,
+        "max_wingspan_m": null,
+        "lead_in_coords": null
       }
     ]
   },

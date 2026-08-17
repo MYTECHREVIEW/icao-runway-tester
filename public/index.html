@@ -435,20 +435,26 @@
         <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Ref:</span>
         <input type="text" id="editorTaxiwayRefInput" class="editor-input" placeholder="e.g. B, G, LANE 8" style="width: 85px;" />
 
-        <input type="text" id="editorTaxiwayNameInput" class="editor-input" placeholder="Display Name (e.g. B)" style="width: 120px;" />
-
         <button id="editorBtnApplyTaxiwayEdit" class="editor-btn action-apply" title="Apply taxiway label change" onclick="window.applyTaxiwayEdits()">
-          <span>✔️</span> Update
+          <span>✔️</span> Rename
         </button>
 
         <div class="editor-divider"></div>
 
-        <button id="editorBtnAddTaxiVertex" class="editor-btn action-trace" title="Insert a new curve point" onclick="window.insertTaxiwayVertex()">
+        <button id="editorBtnRetraceTaxiway" class="editor-btn action-trace" style="background: #0284c7; color:#fff;" title="Re-draw this taxiway path by clicking waypoints" onclick="window.startRetracingTaxiway()">
+          <span>✏️</span> Re-trace Path
+        </button>
+
+        <button id="editorBtnAddTaxiVertex" class="editor-btn" style="background: rgba(56, 189, 248, 0.2); border-color:#38bdf8; color:#38bdf8;" title="Insert a new curve point" onclick="window.insertTaxiwayVertex()">
           <span>➕</span> Add Vertex
         </button>
 
         <button id="editorBtnSmoothTaxiway" class="editor-btn" style="background: rgba(168, 85, 247, 0.2); border-color: #a855f7; color: #c084fc;" title="Smooth taxiway curve" onclick="window.smoothSelectedTaxiway()">
-          <span>✨</span> Smooth Curve
+          <span>✨</span> Smooth
+        </button>
+
+        <button id="editorBtnDeleteTaxiway" class="editor-btn action-delete" title="Delete selected taxiway segment" onclick="window.deleteSelectedTaxiway()">
+          <span>🗑️</span>
         </button>
       </div>
     </div>
@@ -457,13 +463,13 @@
     <div id="editorRunwaysRow" class="editor-edit-row hidden">
       <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
         <label style="font-size: 11px; color: var(--text-secondary); font-weight: 700;">Runway:</label>
-        <select id="editorRunwaySelect" class="editor-select" style="width: 110px;" onchange="window.selectRunwayForEditing(this.value)">
+        <select id="editorRunwaySelect" class="editor-select" style="width: 120px;" onchange="window.selectRunwayForEditing(this.value)">
           <option value="">-- Runway --</option>
         </select>
 
-        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Heading / Angle:</span>
-        <input type="range" id="runwayAngleSlider" min="0" max="360" step="0.1" value="0" style="width: 100px; cursor: pointer;" oninput="window.handleRunwaySlider(this.value)" />
-        <input type="number" id="runwayAngleInput" class="editor-input" step="0.1" style="width: 60px;" onchange="window.handleRunwayAngleInput(this.value)" />
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Angle:</span>
+        <input type="range" id="runwayAngleSlider" min="0" max="360" step="0.1" value="0" style="width: 90px; cursor: pointer;" oninput="window.handleRunwaySlider(this.value)" />
+        <input type="number" id="runwayAngleInput" class="editor-input" step="0.1" style="width: 58px;" onchange="window.handleRunwayAngleInput(this.value)" />
         <span style="font-size: 11px; color: var(--text-muted);">°</span>
 
         <button class="editor-btn" style="padding: 4px 6px;" title="Step angle -0.1°" onclick="window.stepRunwayAngle(-0.1)">-0.1°</button>
@@ -471,8 +477,14 @@
 
         <div class="editor-divider"></div>
 
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Nudge:</span>
+        <button class="editor-btn" style="padding: 4px 6px;" title="Move North" onclick="window.nudgeRunway(0.00005, 0)">⬆️</button>
+        <button class="editor-btn" style="padding: 4px 6px;" title="Move South" onclick="window.nudgeRunway(-0.00005, 0)">⬇️</button>
+        <button class="editor-btn" style="padding: 4px 6px;" title="Move West" onclick="window.nudgeRunway(0, -0.00005)">⬅️</button>
+        <button class="editor-btn" style="padding: 4px 6px;" title="Move East" onclick="window.nudgeRunway(0, 0.00005)">➡️</button>
+
         <button id="editorBtnApplyRunway" class="editor-btn action-apply" title="Save runway calibration" onclick="window.saveRunwayChanges()">
-          <span>💾</span> Save Runway Calibration
+          <span>💾</span> Save Runway
         </button>
       </div>
     </div>
@@ -481,17 +493,25 @@
     <div id="editorHoldPointsRow" class="editor-edit-row hidden">
       <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
         <label style="font-size: 11px; color: var(--text-secondary); font-weight: 700;">Shape:</label>
-        <select id="holdPointShapeSelect" class="editor-select" style="width: 120px;">
-          <option value="triangle">▲ Triangle Hold</option>
-          <option value="square">◼ Square Hold</option>
-          <option value="circle">● Circle Hold</option>
+        <select id="holdPointShapeSelect" class="editor-select" style="width: 110px;" onchange="window.updateSelectedHoldPointShape(this.value)">
+          <option value="triangle">▲ Triangle</option>
+          <option value="square">◼ Square</option>
+          <option value="circle">● Circle</option>
         </select>
 
-        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">ID / Text:</span>
-        <input type="text" id="holdPointRefInput" class="editor-input" placeholder="e.g. B1, 04, CAT II" style="width: 110px;" />
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">ID:</span>
+        <input type="text" id="holdPointRefInput" class="editor-input" placeholder="e.g. B1, 04" style="width: 70px;" oninput="window.updateSelectedHoldPointText(this.value)" />
+
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Angle:</span>
+        <input type="range" id="holdPointAngleSlider" min="0" max="360" step="1" value="0" style="width: 75px; cursor: pointer;" oninput="window.updateSelectedHoldPointAngle(this.value)" />
+        <span id="holdPointAngleVal" style="font-size: 11px; color: #38bdf8; font-family: var(--font-mono); width: 32px;">0°</span>
 
         <button id="btnAddHoldPoint" class="editor-btn action-apply" style="background: #eab308; color: #000; font-weight: 800;" onclick="window.createHoldPointAtCenter()">
-          <span>📍</span> Drop Hold Spot
+          <span>📍</span> Drop New Spot
+        </button>
+
+        <button id="btnDeleteHoldPoint" class="editor-btn action-delete" title="Delete selected hold spot" onclick="window.deleteSelectedHoldPoint()">
+          <span>🗑️</span>
         </button>
 
         <div class="editor-divider"></div>
