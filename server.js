@@ -31,6 +31,9 @@ try {
     const flat = JSON.parse(fs.readFileSync(RUNWAY_DB_PATH, 'utf-8'));
     for (const rwy of flat) {
         if (!rwy.airport_icao) continue;
+        // Filter out closed and decommissioned runways
+        if (rwy.closed === true || rwy.closed === 1 || rwy.closed === '1' || rwy.closed === 'true') continue;
+        if (rwy.surface && (rwy.surface.toLowerCase() === 'closed' || rwy.surface.toLowerCase() === 'clsd')) continue;
         const icao = rwy.airport_icao.toUpperCase().trim();
         if (!runwaysByIcao[icao]) runwaysByIcao[icao] = [];
         runwaysByIcao[icao].push(rwy);
