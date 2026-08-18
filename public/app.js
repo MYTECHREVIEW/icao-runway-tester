@@ -1296,6 +1296,7 @@ async function drawAirportTerminals(data) {
       interactive: false
     });
     targetLayer.addLayer(tBar);
+    terminalLayerGroup.addLayer(tBar);
 
     // Custom Traced Lead-In Line
     let customLine = null;
@@ -1391,6 +1392,7 @@ async function drawAirportTerminals(data) {
     }
 
     targetLayer.addLayer(badgeMarker);
+    terminalLayerGroup.addLayer(badgeMarker);
   });
 
   // 2. Draw Holding Position Symbols
