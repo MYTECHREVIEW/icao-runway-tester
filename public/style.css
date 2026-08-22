@@ -1802,7 +1802,11 @@ input:checked + .slider:before {
 }
 
 
-/* ── Labeled Holding Spot Symbols (Triangles, Squares, Circles) ─────────────── */
+
+/* ── Dynamic Map Zoom Proportional Scaling & Density Thresholds ─────────── */
+:root {
+  --map-zoom-scale: 1;
+}
 
 .hold-spot-wrapper {
   background: transparent !important;
@@ -1810,57 +1814,44 @@ input:checked + .slider:before {
 }
 
 .hold-spot-marker {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-weight: 900;
-  font-size: 10px;
-  color: #ffffff;
-  user-select: none;
-  cursor: grab;
-  transition: transform 0.15s ease;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  user-select: none !important;
+  cursor: grab !important;
+  transform: rotate(var(--hp-angle, 0deg)) scale(var(--map-zoom-scale, 1)) !important;
+  transform-origin: center center !important;
+  transition: transform 0.08s ease, opacity 0.2s ease, filter 0.15s ease !important;
 }
 .hold-spot-marker:hover {
-  transform: scale(1.25);
+  transform: rotate(var(--hp-angle, 0deg)) scale(calc(var(--map-zoom-scale, 1) * 1.25)) !important;
 }
 
-.hold-spot-marker.triangle {
-  width: 0;
-  height: 0;
-  border-left: 14px solid transparent;
-  border-right: 14px solid transparent;
-  border-bottom: 24px solid #ef4444;
-  position: relative;
-  filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.9));
-}
-.hold-spot-marker.triangle span {
-  position: absolute;
-  top: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 9px;
-  color: #ffffff;
-  text-shadow: 0 1px 2px #000;
+.hold-spot-marker.selected {
+  transform: rotate(var(--hp-angle, 0deg)) scale(calc(var(--map-zoom-scale, 1) * 1.35)) !important;
+  filter: drop-shadow(0 0 12px #00d4ff) drop-shadow(0 0 4px #ffffff) !important;
+  z-index: 1200 !important;
 }
 
-.hold-spot-marker.square {
-  width: 22px;
-  height: 22px;
-  background: #dc2626;
-  border: 2px solid #ffffff;
-  border-radius: 3px;
-  box-shadow: 0 0 10px rgba(220, 38, 38, 0.8), 0 0 4px #000;
+.hold-spot-marker svg {
+  display: block !important;
+  width: 32px !important;
+  height: 32px !important;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8)) !important;
 }
 
-.hold-spot-marker.circle {
-  width: 22px;
-  height: 22px;
-  background: #eab308;
-  color: #000000;
-  border: 2px solid #000000;
-  border-radius: 50%;
-  box-shadow: 0 0 10px rgba(234, 179, 8, 0.8), 0 0 4px #000;
+/* Hide holding spots when zoomed out below zoom 16.5 in normal mode to prevent overlap clumps */
+.map-zoom-out-hide-holdspots:not(.in-edit-mode) .hold-spot-marker {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+/* Gate and Stand badges scaled proportionally with zoom so they don't overpower the map */
+.gate-map-badge, .stand-map-badge {
+  transform: translate(-50%, -50%) scale(var(--map-zoom-scale, 1)) !important;
+  transform-origin: center center !important;
+  transition: transform 0.08s ease !important;
 }
 
 /* Taxiway vertex editing handles */
@@ -1934,3 +1925,131 @@ input:checked + .slider:before {
   border-color: #ffffff !important;
   box-shadow: 0 0 14px rgba(250, 204, 21, 0.9), 0 0 4px #000 !important;
 }
+
+.pulse-save-btn {
+  background: #059669 !important;
+  color: #ffffff !important;
+  border-color: #34d399 !important;
+  animation: pulseSaveBtn 1.2s infinite alternate !important;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.8) !important;
+  font-weight: 800 !important;
+}
+
+@keyframes pulseSaveBtn {
+  0% { transform: scale(1); box-shadow: 0 0 8px rgba(16, 185, 129, 0.5); }
+  100% { transform: scale(1.05); box-shadow: 0 0 16px rgba(16, 185, 129, 0.95); }
+}
+
+.taxi-vertex-handle.selected-join-source {
+  background: #10b981 !important;
+  border-color: #ffffff !important;
+  box-shadow: 0 0 18px #10b981, 0 0 6px #ffffff !important;
+  transform: scale(1.6) !important;
+  animation: pulseJoinSource 1s infinite alternate !important;
+}
+
+@keyframes pulseJoinSource {
+  0% { transform: scale(1.4); box-shadow: 0 0 12px #10b981; }
+  100% { transform: scale(1.8); box-shadow: 0 0 24px #10b981, 0 0 8px #ffffff; }
+}
+
+.pulse-join-btn {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  border-color: #38bdf8 !important;
+  animation: pulseJoinBtn 1.2s infinite alternate !important;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.9) !important;
+}
+@keyframes pulseJoinBtn {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.05); }
+}
+
+.taxi-vertex-handle.target-snap-handle {
+  background: #f59e0b !important;
+  border: 2px solid #ffffff !important;
+  opacity: 0.85;
+}
+.taxi-vertex-handle.target-snap-handle:hover {
+  background: #10b981 !important;
+  transform: scale(1.5) !important;
+  opacity: 1;
+}
+
+.taxi-center-move-handle {
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 50% !important;
+  background: #0284c7 !important;
+  border: 2.5px solid #ffffff !important;
+  box-shadow: 0 0 12px rgba(2, 132, 199, 0.9), 0 0 4px #000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: move !important;
+  font-size: 11px !important;
+  transition: transform 0.1s ease !important;
+}
+.taxi-center-move-handle:hover {
+  transform: scale(1.3) !important;
+  background: #0369a1 !important;
+}
+
+.taxi-vertex-handle.selected-vertex-highlight {
+  background: #facc15 !important;
+  border-color: #ffffff !important;
+  box-shadow: 0 0 16px rgba(250, 204, 21, 1), 0 0 6px #000 !important;
+  transform: scale(1.4) !important;
+  z-index: 1000 !important;
+}
+
+
+/* ── NOTAM Safety Confirmation Modal ─────────────────────────────────────────── */
+.notam-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 13, 20, 0.75);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.15s ease-out;
+}
+.notam-modal.hidden {
+  display: none !important;
+}
+.notam-modal-content {
+  background: #0f172a;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 460px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(239, 68, 68, 0.3);
+  overflow: hidden;
+}
+.notam-modal-header {
+  background: rgba(239, 68, 68, 0.15);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.notam-modal-body {
+  padding: 16px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #e2e8f0;
+}
+.notam-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(15, 23, 42, 0.8);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── Production Mode: Hide dev-only elements ─────────────────────────────────── */
+.dev-only { /* visibility controlled by JS APP_MODE check at runtime */ }

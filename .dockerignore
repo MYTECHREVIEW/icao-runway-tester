@@ -3,3 +3,6 @@ npm-debug.log
 .git
 .DS_Store
 server.log
+
+# Do not bake API keys into Docker image
+data/api-keys.json

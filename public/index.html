@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>window.APP_MODE = '__APP_MODE__';</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ICAO Runway Analyzer — Touchdown &amp; Centerline Precision Tester</title>
@@ -12,7 +13,7 @@
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="style.css?v=1787012216805" />
+  <link rel="stylesheet" href="style.css?v=1787277541650" />
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -210,7 +211,8 @@
       </div>
     </div>
 
-    <!-- 8. Taxiways Toggle (OFF by default) & Progressive Route Clearance -->
+    <!-- 8. Taxiways Toggle (OFF by default) & Progressive Route Clearance (DEV ONLY) -->
+    <div class="dev-only">
     <div class="panel" id="displaySettingsPanel">
       <div class="panel-header">
         <span class="panel-icon">🚖</span>
@@ -284,7 +286,10 @@
       </div>
     </div>
 
-    <!-- 9. Gates & Stands Overlay -->
+    </div><!-- /dev-only taxiway panel -->
+
+    <!-- 9. Gates & Stands Overlay (DEV ONLY) -->
+    <div class="dev-only">
     <div class="panel" id="terminalPanel">
       <div class="panel-header">
         <span class="panel-icon">🚪</span>
@@ -336,6 +341,8 @@
     </div>
 
     <!-- Footer -->
+    </div><!-- /dev-only gates panel -->
+
     <div class="sidebar-footer">
       <span>FAA GIS Geodetic Survey • Real ATIS • VATSIM • IVAO • METAR</span>
       <span>MYTECHREVIEW / icao-runway-database</span>
@@ -396,8 +403,18 @@
           <option value="stand">🅿️ Stand</option>
         </select>
 
-        <button id="editorBtnApplyEdit" class="editor-btn action-apply" title="Apply changes" onclick="window.applyBayEdits()">
+        <button id="editorBtnApplyEdit" class="editor-btn action-apply" title="Apply number/name changes" onclick="window.applyBayEdits()">
           <span>✔️</span> Update
+        </button>
+
+        <div class="editor-divider"></div>
+
+        <button id="editorBtnAddNewGate" class="editor-btn" style="background: rgba(16, 185, 129, 0.25); border: 1px solid #10b981; color: #6ee7b7; font-weight: 800;" title="Create & drop a new jetbridge gate at map center" onclick="window.addNewGateOrStand('gate')">
+          <span>➕ 🚪</span> Add Gate
+        </button>
+
+        <button id="editorBtnAddNewStand" class="editor-btn" style="background: rgba(168, 85, 247, 0.25); border: 1px solid #a855f7; color: #d8b4fe; font-weight: 800;" title="Create & drop a new parking stand at map center" onclick="window.addNewGateOrStand('stand')">
+          <span>➕ 🅿️</span> Add Stand
         </button>
 
         <div class="editor-divider"></div>
@@ -418,7 +435,7 @@
           <span>🔄</span> Reset
         </button>
 
-        <button id="editorBtnDeleteBay" class="editor-btn action-delete" title="Delete spot" onclick="window.deleteSelectedBay()">
+        <button id="editorBtnDeleteBay" class="editor-btn action-delete" title="Delete selected gate/stand" onclick="window.deleteSelectedBay()">
           <span>🗑️</span>
         </button>
       </div>
@@ -435,8 +452,12 @@
         <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Ref:</span>
         <input type="text" id="editorTaxiwayRefInput" class="editor-input" placeholder="e.g. B, G, LANE 8" style="width: 85px;" />
 
-        <button id="editorBtnApplyTaxiwayEdit" class="editor-btn action-apply" title="Apply taxiway label change" onclick="window.applyTaxiwayEdits()">
-          <span>✔️</span> Rename
+        <button id="editorBtnApplyTaxiwayEdit" class="editor-btn action-apply" title="Save taxiway trace or apply rename" onclick="window.applyTaxiwayEdits()">
+          <span>✔️</span> Save / Rename
+        </button>
+
+        <button id="editorBtnCancelTaxiTrace" class="editor-btn hidden" style="background: rgba(239, 68, 68, 0.25); border-color:#ef4444; color:#fca5a5;" title="Cancel taxiway drawing" onclick="window.cancelRetracingTaxiway()">
+          <span>❌</span> Cancel
         </button>
 
         <div class="editor-divider"></div>
@@ -444,16 +465,22 @@
         <button id="editorBtnNewTaxiway" class="editor-btn action-add" style="background: #0284c7; color:#fff;" title="Create and draw a new taxiway" onclick="window.startCreatingNewTaxiway()">
           <span>➕</span> New Taxiway
         </button>
+        <button id="editorBtnAddTaxiBranch" class="editor-btn action-add" style="background: rgba(14, 165, 233, 0.25); border: 1px solid #38bdf8; color: #38bdf8;" title="Add a second trace/corner branch to this taxiway without deleting the existing line" onclick="window.startAddingTaxiwayBranch()">
+          <span>➕</span> Add Branch
+        </button>
         <button id="editorBtnRetraceTaxiway" class="editor-btn action-trace" style="background: rgba(56, 189, 248, 0.2); border-color:#38bdf8; color:#38bdf8;" title="Re-draw this taxiway path by clicking waypoints" onclick="window.startRetracingTaxiway()">
           <span>✏️</span> Re-trace
         </button>
 
-        <button id="editorBtnAddTaxiVertex" class="editor-btn" style="background: rgba(56, 189, 248, 0.2); border-color:#38bdf8; color:#38bdf8;" title="Insert a new curve point" onclick="window.insertTaxiwayVertex()">
+        <button id="editorBtnAddTaxiVertex" class="editor-btn" style="background: rgba(56, 189, 248, 0.2); border-color:#38bdf8; color:#38bdf8;" title="Click polyline on map or click here to add vertex" onclick="window.insertTaxiwayVertex()">
           <span>➕</span> Add Vertex
         </button>
+        <button id="editorBtnDeleteTaxiVertex" class="editor-btn" style="background: rgba(239, 68, 68, 0.2); border-color:#ef4444; color:#fca5a5;" title="Right-click any dot or click here to delete vertex" onclick="window.deleteSelectedTaxiwayVertex()">
+          <span>➖</span> Delete Vertex
+        </button>
 
-        <button id="editorBtnJoinEndpoints" class="editor-btn action-join" style="background: rgba(14, 165, 233, 0.2); border-color: #38bdf8; color: #38bdf8;" title="Magnetically join endpoints to connecting taxiways" onclick="window.joinTaxiwayToNearest()">
-          <span>🔗</span> Join Vertices
+        <button id="editorBtnJoinEndpoints" class="editor-btn action-join" style="background: rgba(14, 165, 233, 0.2); border-color: #38bdf8; color: #38bdf8;" title="Click a vertex dot, then click any other dot or path line to snap & weld" onclick="window.toggleJoinMode()">
+          <span>🔗</span> Join to Path / Dot
         </button>
         <button id="editorBtnSmoothTaxiway" class="editor-btn" style="background: rgba(168, 85, 247, 0.2); border-color: #a855f7; color: #c084fc;" title="Smooth taxiway curve" onclick="window.smoothSelectedTaxiway()">
           <span>✨</span> Smooth
@@ -484,10 +511,16 @@
         <div class="editor-divider"></div>
 
         <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Nudge:</span>
-        <button class="editor-btn" style="padding: 4px 6px;" title="Move North" onclick="window.nudgeRunway(0.00005, 0)">⬆️</button>
-        <button class="editor-btn" style="padding: 4px 6px;" title="Move South" onclick="window.nudgeRunway(-0.00005, 0)">⬇️</button>
-        <button class="editor-btn" style="padding: 4px 6px;" title="Move West" onclick="window.nudgeRunway(0, -0.00005)">⬅️</button>
-        <button class="editor-btn" style="padding: 4px 6px;" title="Move East" onclick="window.nudgeRunway(0, 0.00005)">➡️</button>
+        <select id="runwayNudgeStepSelect" class="editor-select" style="width: 86px; padding: 2px 4px; font-size: 11px;" title="Nudge step size in decimal degrees">
+          <option value="0.000001">0.000001° (~0.1m)</option>
+          <option value="0.000005" selected>0.000005° (~0.5m)</option>
+          <option value="0.00001">0.00001° (~1.1m)</option>
+          <option value="0.00005">0.00005° (~5.5m)</option>
+        </select>
+        <button class="editor-btn" style="padding: 4px 6px;" title="Move North (ArrowUp)" onclick="window.nudgeRunway(1, 0)">⬆️</button>
+        <button class="editor-btn" style="padding: 4px 6px;" title="Move South (ArrowDown)" onclick="window.nudgeRunway(-1, 0)">⬇️</button>
+        <button class="editor-btn" style="padding: 4px 6px;" title="Move West (ArrowLeft)" onclick="window.nudgeRunway(0, -1)">⬅️</button>
+        <button class="editor-btn" style="padding: 4px 6px;" title="Move East (ArrowRight)" onclick="window.nudgeRunway(0, 1)">➡️</button>
 
         <button id="editorBtnApplyRunway" class="editor-btn action-apply" title="Save runway calibration" onclick="window.saveRunwayChanges()">
           <span>💾</span> Save Runway
@@ -498,22 +531,44 @@
     <!-- 4. Labeled Holding Spots Row -->
     <div id="editorHoldPointsRow" class="editor-edit-row hidden">
       <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-        <label style="font-size: 11px; color: var(--text-secondary); font-weight: 700;">Shape:</label>
-        <select id="holdPointShapeSelect" class="editor-select" style="width: 110px;" onchange="window.updateSelectedHoldPointShape(this.value)">
+        <label style="font-size: 11px; color: var(--text-secondary); font-weight: 700;">Spot:</label>
+        <select id="editorHoldPointSelect" class="editor-select" style="max-width: 140px;" onchange="window.selectHoldPointForEditing(this.value)">
+          <option value="">-- Choose Spot --</option>
+        </select>
+
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Shape:</span>
+        <select id="holdPointShapeSelect" class="editor-select" style="width: 105px;" onchange="window.updateSelectedHoldPointShape(this.value)">
           <option value="triangle">▲ Triangle</option>
           <option value="square">◼ Square</option>
           <option value="circle">● Circle</option>
         </select>
 
         <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">ID:</span>
-        <input type="text" id="holdPointRefInput" class="editor-input" placeholder="e.g. B1, 04" style="width: 70px;" oninput="window.updateSelectedHoldPointText(this.value)" />
+        <input type="text" id="holdPointRefInput" class="editor-input" placeholder="e.g. B1, 04" style="width: 75px;" oninput="window.updateSelectedHoldPointText(this.value)" />
 
         <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Angle:</span>
-        <input type="range" id="holdPointAngleSlider" min="0" max="360" step="1" value="0" style="width: 75px; cursor: pointer;" oninput="window.updateSelectedHoldPointAngle(this.value)" />
+        <input type="range" id="holdPointAngleSlider" min="0" max="360" step="1" value="0" style="width: 70px; cursor: pointer;" oninput="window.updateSelectedHoldPointAngle(this.value)" />
         <span id="holdPointAngleVal" style="font-size: 11px; color: #38bdf8; font-family: var(--font-mono); width: 32px;">0°</span>
 
-        <button id="btnAddHoldPoint" class="editor-btn action-apply" style="background: #eab308; color: #000; font-weight: 800;" onclick="window.createHoldPointAtCenter()">
-          <span>📍</span> Drop New Spot
+        <button class="editor-btn" style="padding: 4px 6px;" title="Step angle -5°" onclick="window.stepHoldPointAngle(-5)">-5°</button>
+        <button class="editor-btn" style="padding: 4px 6px;" title="Step angle +5°" onclick="window.stepHoldPointAngle(5)">+5°</button>
+
+        <button id="btnAttachHoldPoint" class="editor-btn action-join" style="background: rgba(14, 165, 233, 0.2); border-color: #38bdf8; color: #38bdf8;" title="Snap and attach this spot directly to a taxiway centerline" onclick="window.startAttachingHoldPoint()">
+          <span>🔗</span> Attach to Taxiway
+        </button>
+
+        <div class="editor-divider"></div>
+
+        <button id="btnAddHoldTriangle" class="editor-btn" style="background: rgba(225, 29, 72, 0.25); border: 1px solid #f43f5e; color: #fda4af; font-weight: 800;" title="Add Runway Hold Short Triangle" onclick="window.createHoldPoint('triangle')">
+          <span>➕ ▲</span> Triangle
+        </button>
+
+        <button id="btnAddHoldSquare" class="editor-btn" style="background: rgba(234, 88, 12, 0.25); border: 1px solid #f97316; color: #fdba74; font-weight: 800;" title="Add Intermediate Hold Square" onclick="window.createHoldPoint('square')">
+          <span>➕ ◼</span> Square
+        </button>
+
+        <button id="btnAddHoldCircle" class="editor-btn" style="background: rgba(217, 70, 239, 0.25); border: 1px solid #e879f9; color: #f5d0fe; font-weight: 800;" title="Add Apron / Ramp Spot Circle" onclick="window.createHoldPoint('circle')">
+          <span>➕ ●</span> Circle
         </button>
 
         <button id="btnDeleteHoldPoint" class="editor-btn action-delete" title="Delete selected hold spot" onclick="window.deleteSelectedHoldPoint()">
@@ -523,40 +578,21 @@
         <div class="editor-divider"></div>
 
         <button id="btnSaveHoldPoints" class="editor-btn action-save" onclick="window.saveHoldPointsChanges()">
-          <span>💾</span> Save Hold Spots
+          <span>💾</span> Save Spots
         </button>
       </div>
     </div>
 
     <!-- Toolbar Primary Actions -->
     <div class="editor-actions" style="justify-content: space-between; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 8px;">
-      <div style="display: flex; gap: 6px; align-items: center;">
-        <button id="editorBtnToggleAddForm" class="editor-btn action-add" title="Open add new gate/stand form" onclick="window.toggleAddSpotPanel()">
-          <span>➕</span> Add Spot
-        </button>
-        <span id="editorInfoLabel" style="font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono);"></span>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <span id="editorInfoLabel" style="font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); font-weight: 700;"></span>
       </div>
 
       <div style="display: flex; gap: 8px;">
-        <button id="editorBtnSave" class="editor-btn action-save" title="Save all airport changes permanently to database" onclick="window.saveEditorChanges(false)">
-          <span id="saveBtnIcon">💾</span> <span id="saveBtnText">Save Changes to DB</span>
+        <button id="editorBtnSave" class="editor-btn action-save" style="font-size: 11.5px; padding: 6px 14px;" title="Save all airport changes permanently to database" onclick="window.saveEditorChanges(false)">
+          <span id="saveBtnIcon">💾</span> <span id="saveBtnText">Save All Airport Changes to DB</span>
         </button>
-      </div>
-    </div>
-
-    <!-- Inline Add New Spot Panel -->
-    <div id="editorAddPanel" class="editor-add-panel hidden">
-      <div style="font-size: 11px; font-weight: 800; color: #38bdf8; margin-bottom: 6px;">➕ Create New Aircraft Parking Spot:</div>
-      <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-        <input type="text" id="newSpotRefInput" class="editor-input" placeholder="Spot Number (e.g. 48B, 99)..." style="width: 170px;" />
-        <select id="newSpotTypeSelect" class="editor-select" style="width: 110px;">
-          <option value="gate">🚪 Jetbridge Gate</option>
-          <option value="stand">🅿️ Remote Stand</option>
-        </select>
-        <button id="btnConfirmAddSpot" class="editor-btn action-apply" style="background: #0284c7; color: #fff;" onclick="window.confirmAddNewSpot()">
-          <span>📍</span> Drop at Center
-        </button>
-        <button id="btnCancelAddSpot" class="editor-btn action-exit" onclick="window.toggleAddSpotPanel(false)">Cancel</button>
       </div>
     </div>
   </div>
@@ -602,6 +638,28 @@
   <!-- Toast Notification -->
   <div id="editorToast" class="editor-toast hidden"></div>
 
-  <script src="app.js?v=1787012216805"></script>
+  <script src="app.js?v=1787344933472"></script>
+
+  <!-- NOTAM Closed Taxiway Warning Confirmation Modal -->
+  <div id="notamWarningModal" class="notam-modal hidden">
+    <div class="notam-modal-content">
+      <div class="notam-modal-header">
+        <span style="font-size: 20px;">⚠️</span>
+        <span style="font-weight: 800; font-size: 14px; color: #f87171;">NOTAM CLOSURE ALERT</span>
+      </div>
+      <div id="notamModalBody" class="notam-modal-body">
+        Taxiway is marked CLOSED in active NOTAMs.
+      </div>
+      <div class="notam-modal-actions">
+        <button id="btnNotamCancel" class="editor-btn action-exit" style="padding: 6px 14px; font-weight: 700;">
+          ⛔ Modify Route
+        </button>
+        <button id="btnNotamProceed" class="editor-btn action-save" style="background: #dc2626; border-color: #ef4444; color: #fee2e2; padding: 6px 14px; font-weight: 800;">
+          ⚠️ Yes, Proceed Anyway
+        </button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

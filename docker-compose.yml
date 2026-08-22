@@ -7,6 +7,13 @@ services:
     restart: unless-stopped
     ports:
       - "3500:3500"
+    volumes:
+      - ./data:/app/data   # Persist calibrated data & API keys across image pulls
     environment:
       - PORT=3500
       - NODE_ENV=production
+      - ADMIN_KEY=${ADMIN_KEY:-}   # Protects /admin panel
+      - DEPLOY_SSH_HOST=${DEPLOY_SSH_HOST:-}  # Optional: SSH host for auto-deploy
+      - DEPLOY_SSH_USER=${DEPLOY_SSH_USER:-}  # Optional: SSH user
+      - DEPLOY_SSH_PATH=${DEPLOY_SSH_PATH:-/opt/icao-runway-tester}  # Path on server
+      - API_KEY=${API_KEY:-}   # Set your API key here or via .env file

@@ -2,3 +2,6 @@ node_modules/
 .DS_Store
 server.log
 .env
+
+# API key store — never commit keys
+data/api-keys.json
