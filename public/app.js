@@ -1,4 +1,50 @@
 
+// ── Programmatic Touchdown GPS Coordinate Injection ───────────────────────────
+function pushTouchdownCoordinates(lat, lon, opts = {}) {
+    lat = parseFloat(lat);
+    lon = parseFloat(lon);
+    if (isNaN(lat) || isNaN(lon)) {
+        console.warn('Invalid touchdown coordinates:', lat, lon);
+        return;
+    }
+
+    selectedRunwayKey = null;
+    selectedTaxiwayRef = null;
+
+    if (!pinMarker) {
+        pinMarker = L.marker([lat, lon], { icon: pinIcon(true, false, false), draggable: true }).addTo(map);
+        pinMarker.on('dragend', function(e) {
+            const pos = e.target.getLatLng();
+            analyzePoint(pos.lat, pos.lng);
+        });
+    } else {
+        pinMarker.setLatLng([lat, lon]);
+    }
+
+    const zoomLevel = opts.zoom || 16;
+    map.flyTo([lat, lon], zoomLevel, { duration: 1.2 });
+    analyzePoint(lat, lon, opts.icao || null);
+
+    const fpmText = opts.fpm ? ` (VS: ${opts.fpm} fpm)` : '';
+    showEditorToast(`🛬 Touchdown registered at ${lat.toFixed(6)}, ${lon.toFixed(6)}${fpmText}`, 4500);
+}
+window.pushTouchdownCoordinates = pushTouchdownCoordinates;
+
+// 1. PostMessage Bridge for Embedding Apps (Electron, React, Sim Connectors)
+window.addEventListener('message', function(event) {
+    if (!event.data) return;
+    const d = event.data;
+    if (d.type === 'TOUCHDOWN' || d.type === 'SET_COORDINATES' || (d.lat && d.lon)) {
+        pushTouchdownCoordinates(d.lat, d.lon, {
+            icao: d.icao,
+            fpm: d.fpm || d.vertical_speed_fpm,
+            ias: d.ias || d.ias_kt,
+            g: d.g || d.g_force,
+            hdg: d.hdg || d.heading
+        });
+    }
+});
+
 // ── Last Airport Cookie Persistence ─────────────────────────────────────────
 const LAST_AIRPORT_COOKIE = 'rwy_last_airport';
 const COOKIE_EXPIRY_DAYS = 365;
@@ -4195,6 +4241,17 @@ async function goToAirport(query) {
   query = query.trim();
   if (!query) return;
 
+  // Direct GPS Coordinate check (e.g. "40.7738, -73.8712" or "40.7738 -73.8712")
+  const coordMatch = query.match(/^([-+]?[0-9]*\.?[0-9]+)[,\s]+([-+]?[0-9]*\.?[0-9]+)$/);
+  if (coordMatch) {
+    const lat = parseFloat(coordMatch[1]);
+    const lon = parseFloat(coordMatch[2]);
+    if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+      pushTouchdownCoordinates(lat, lon);
+      return;
+    }
+  }
+
   // 1. Search local 85,917 airport database first
   try {
     const res = await fetch('/api/airport-search?q=' + encodeURIComponent(query));
@@ -4286,8 +4343,40 @@ document.getElementById('airportSearch').addEventListener('keydown', (e) => {
 initControls();
 showLoading(false);
 
-// ── Startup: Restore last airport from cookie, or default to KLGA ────────────
-(function restoreLastAirport() {
+// ── Startup: Check URL Parameters for Touchdown GPS, or Restore Last Airport ──
+(function checkUrlParamsAndStartup() {
+  const params = new URLSearchParams(window.location.search);
+  const tdParam = params.get('touchdown') || params.get('td');
+  const latParam = params.get('lat') || params.get('latitude');
+  const lonParam = params.get('lon') || params.get('longitude') || params.get('lng');
+  const icaoParam = params.get('icao');
+  const fpmParam = params.get('fpm') || params.get('vs');
+
+  // If URL has direct touchdown GPS coordinates:
+  if (tdParam) {
+    const parts = tdParam.split(',');
+    if (parts.length === 2) {
+      const pLat = parseFloat(parts[0]);
+      const pLon = parseFloat(parts[1]);
+      if (!isNaN(pLat) && !isNaN(pLon)) {
+        setTimeout(() => pushTouchdownCoordinates(pLat, pLon, { icao: icaoParam, fpm: fpmParam }), 400);
+        return;
+      }
+    }
+  } else if (latParam && lonParam) {
+    const pLat = parseFloat(latParam);
+    const pLon = parseFloat(lonParam);
+    if (!isNaN(pLat) && !isNaN(pLon)) {
+      setTimeout(() => pushTouchdownCoordinates(pLat, pLon, { icao: icaoParam, fpm: fpmParam }), 400);
+      return;
+    }
+  } else if (icaoParam) {
+    setTimeout(() => goToAirport(icaoParam), 400);
+    return;
+  }
+
+  // Otherwise restore last airport from cookie:
+  (function restoreLastAirport() {
   const last = loadLastAirport();
   if (last && last.icao && last.lat && last.lon) {
     if (!pinMarker) {
@@ -4308,6 +4397,8 @@ showLoading(false);
   } else {
     analyzePoint(40.777, -73.872, 'KLGA');
   }
+})();
+
 })();
 
 console.log('🛬 ICAO Runway Analyzer ready with Taxiway and Runway Isolation.');

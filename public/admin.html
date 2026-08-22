@@ -221,18 +221,23 @@
     </div>
 
     <!-- API Docs Section -->
-    <div class="section" id="section-docs">
-      <div class="section-title">📚 API Documentation</div>
-      <div class="section-desc">Public REST API — authenticate with <code>X-API-Key</code> header on all requests.</div>
+        <div class="section" id="section-docs">
+      <div class="section-title">📚 API &amp; Touchdown Integration Docs</div>
+      <div class="section-desc">Complete guide for consuming the REST API, receiving touchdown telemetry arrays, and pushing landing coordinates into the map.</div>
 
+      <!-- Authentication Card -->
       <div class="card">
-        <div class="card-title">Authentication</div>
-        <p style="font-size:13px;color:var(--text-sec);margin-bottom:12px">Include your API key in every request header:</p>
-        <div style="font-family:var(--font-mono);font-size:12.5px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;padding:12px 14px;color:var(--text-mono)">X-API-Key: rwy_your_key_here</div>
+        <div class="card-title">🔑 Authentication</div>
+        <p style="font-size:13px;color:var(--text-sec);margin-bottom:12px">All <code>/api/v1/*</code> endpoints require your API key in the request header:</p>
+        <div style="font-family:var(--font-mono);font-size:12.5px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;padding:12px 14px;color:var(--text-mono);display:flex;justify-content:space-between;align-items:center;">
+          <span>X-API-Key: rwy_your_generated_key</span>
+          <button class="btn btn-ghost btn-sm" onclick="copyKey('X-API-Key: rwy_your_generated_key')">📋 Copy</button>
+        </div>
       </div>
 
+      <!-- Endpoints Directory -->
       <div class="card">
-        <div class="card-title">Endpoints</div>
+        <div class="card-title">📡 REST API Endpoints</div>
         <table style="width:100%;border-collapse:collapse;font-size:12.5px">
           <thead><tr>
             <th style="text-align:left;padding:6px 10px;color:var(--text-sec);font-size:10.5px;text-transform:uppercase">Method</th>
@@ -240,26 +245,167 @@
             <th style="text-align:left;padding:6px 10px;color:var(--text-sec);font-size:10.5px;text-transform:uppercase">Description</th>
           </tr></thead>
           <tbody>
-            <tr class="endpoint-row"><td><span class="method-get">GET</span></td><td style="font-family:var(--font-mono);color:var(--text-mono)">/api/v1/airports/search?q=</td><td style="color:var(--text-sec)">Search 85,917 airports by ICAO, IATA, name, city</td></tr>
-            <tr class="endpoint-row"><td><span class="method-get">GET</span></td><td style="font-family:var(--font-mono);color:var(--text-mono)">/api/v1/airport/:icao</td><td style="color:var(--text-sec)">Airport info — name, IATA, lat/lon, elevation, type</td></tr>
-            <tr class="endpoint-row"><td><span class="method-get">GET</span></td><td style="font-family:var(--font-mono);color:var(--text-mono)">/api/v1/airport/:icao/runways</td><td style="color:var(--text-sec)">Calibrated runways — coords, headings, surface, length</td></tr>
-            <tr class="endpoint-row"><td><span class="method-get">GET</span></td><td style="font-family:var(--font-mono);color:var(--text-mono)">/api/v1/airport/:icao/weather</td><td style="color:var(--text-sec)">Live METAR + ATIS (real-world, VATSIM, IVAO)</td></tr>
-            <tr class="endpoint-row"><td><span class="method-get">GET</span></td><td style="font-family:var(--font-mono);color:var(--text-mono)">/api/v1/airport/:icao/notams</td><td style="color:var(--text-sec)">Active NOTAMs and closed runway alerts</td></tr>
+            <tr class="endpoint-row"><td><span style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);padding:2px 8px;border-radius:4px;font-size:10.5px;font-weight:700;">POST</span></td><td style="font-family:var(--font-mono);color:var(--text-mono)">/api/v1/touchdown</td><td style="color:var(--text-sec)">Analyze landing touchdown point — returns centerline deviation, TDZ, remaining dist &amp; landing rating</td></tr>
+            <tr class="endpoint-row"><td><span class="method-get">GET</span></td><td style="font-family:var(--font-mono);color:var(--text-mono)">/api/v1/airport/:icao</td><td style="color:var(--text-sec)">Airport info — name, IATA, lat/lon, elevation, timezone</td></tr>
+            <tr class="endpoint-row"><td><span class="method-get">GET</span></td><td style="font-family:var(--font-mono);color:var(--text-mono)">/api/v1/airport/:icao/runways</td><td style="color:var(--text-sec)">All calibrated runways — coordinates, headings, length, surface</td></tr>
+            <tr class="endpoint-row"><td><span class="method-get">GET</span></td><td style="font-family:var(--font-mono);color:var(--text-mono)">/api/v1/airports/search?q=</td><td style="color:var(--text-sec)">Instant search across 85,917 airports by ICAO, IATA, name, or city</td></tr>
+            <tr class="endpoint-row"><td><span class="method-get">GET</span></td><td style="font-family:var(--font-mono);color:var(--text-mono)">/api/v1/airport/:icao/weather</td><td style="color:var(--text-sec)">Live METAR + ATIS (Real-world D-ATIS, VATSIM, IVAO)</td></tr>
+            <tr class="endpoint-row"><td><span class="method-get">GET</span></td><td style="font-family:var(--font-mono);color:var(--text-mono)">/api/v1/airport/:icao/notams</td><td style="color:var(--text-sec)">Active NOTAMs and closed runway designator alerts</td></tr>
           </tbody>
         </table>
       </div>
 
+      <!-- Touchdown Map Coordinate Injection -->
       <div class="card">
-        <div class="card-title">Example — cURL</div>
-        <div style="font-family:var(--font-mono);font-size:12px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;padding:14px 16px;color:var(--text-mono);line-height:2.2">
-<span style="color:var(--text-sec)"># Airport info</span>
-curl -H "X-API-Key: rwy_your_key" https://your-server.com/api/v1/airport/KLAX
+        <div class="card-title">🎯 Push Touchdown GPS Coordinates into the Map (No Manual Pin Drop)</div>
+        <p style="font-size:13px;color:var(--text-sec);margin-bottom:14px">There are 3 ways to automatically drop the landing pin and display touchdown metrics in the web interface:</p>
 
-<span style="color:var(--text-sec)"># Runways</span>
-curl -H "X-API-Key: rwy_your_key" https://your-server.com/api/v1/airport/KLAX/runways
+        <div style="margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:4px;">Option A: Deep Linking via URL Query Parameters</div>
+          <p style="font-size:12px;color:var(--text-sec);margin-bottom:6px;">Open or embed the map with coordinates in the URL:</p>
+          <div style="font-family:var(--font-mono);font-size:11.5px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-mono);margin-bottom:6px;">
+            https://your-server.com/?touchdown=40.77665,-73.87185
+          </div>
+          <div style="font-family:var(--font-mono);font-size:11.5px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-mono);">
+            https://your-server.com/?lat=40.77665&amp;lon=-73.87185&amp;icao=KLGA&amp;fpm=-135&amp;ias=132&amp;g=1.14
+          </div>
+        </div>
 
-<span style="color:var(--text-sec)"># Search</span>
-curl -H "X-API-Key: rwy_your_key" "https://your-server.com/api/v1/airports/search?q=LAX"
+        <div style="margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:4px;">Option B: Real-Time postMessage (For Iframes &amp; Desktop Sim Connectors)</div>
+          <p style="font-size:12px;color:var(--text-sec);margin-bottom:6px;">Push live telemetry dynamically from your parent app or Electron bridge:</p>
+          <div style="font-family:var(--font-mono);font-size:11.5px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;padding:12px;color:var(--text-mono);line-height:1.6;">
+<span style="color:var(--text-sec)">// From your Electron / React / Sim client:</span><br/>
+const iframe = document.getElementById('runwayMapIframe');<br/>
+iframe.contentWindow.postMessage({<br/>
+&nbsp;&nbsp;type: 'TOUCHDOWN',<br/>
+&nbsp;&nbsp;lat: 40.77665, lon: -73.87185, icao: 'KLGA',<br/>
+&nbsp;&nbsp;vertical_speed_fpm: -135, ias_kt: 132, g_force: 1.14, heading: 212<br/>
+}, '*');
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:4px;">Option C: Top Bar "🎯 Touchdown GPS" Button</div>
+          <p style="font-size:12px;color:var(--text-sec);">Click the button in the map header or paste <code>40.77665, -73.87185</code> directly into the search bar.</p>
+        </div>
+      </div>
+
+      <!-- Touchdown API Request & Response Schema -->
+      <div class="card">
+        <div class="card-title">🛬 POST /api/v1/touchdown — Request &amp; Response Schema</div>
+        
+        <p style="font-size:12.5px;font-weight:700;color:var(--text-prim);margin-bottom:6px;">Request Body (JSON)</p>
+        <div style="font-family:var(--font-mono);font-size:11.5px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;padding:12px;color:var(--text-mono);margin-bottom:14px;line-height:1.6;">
+{<br/>
+&nbsp;&nbsp;"lat": 40.77665, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color:var(--text-sec)">// Required: GPS decimal latitude</span><br/>
+&nbsp;&nbsp;"lon": -73.87185, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<span style="color:var(--text-sec)">// Required: GPS decimal longitude</span><br/>
+&nbsp;&nbsp;"heading": 212, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<span style="color:var(--text-sec)">// Optional: Aircraft heading (deg)</span><br/>
+&nbsp;&nbsp;"vertical_speed_fpm": -135, &nbsp; &nbsp;<span style="color:var(--text-sec)">// Optional: Touchdown sink rate (ft/min)</span><br/>
+&nbsp;&nbsp;"ias_kt": 132, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color:var(--text-sec)">// Optional: Touchdown airspeed (knots)</span><br/>
+&nbsp;&nbsp;"g_force": 1.14, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color:var(--text-sec)">// Optional: Impact G-load</span><br/>
+&nbsp;&nbsp;"icao": "KLGA" &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color:var(--text-sec)">// Optional: Airport override</span><br/>
+}
+        </div>
+
+        <p style="font-size:12.5px;font-weight:700;color:var(--text-prim);margin-bottom:6px;">Response JSON Payload</p>
+        <div style="font-family:var(--font-mono);font-size:11.5px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;padding:12px;color:var(--text-mono);line-height:1.6;max-height:360px;overflow-y:auto;">
+{<br/>
+&nbsp;&nbsp;"status": "on_runway", &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color:var(--text-sec)">// "on_runway" | "near_runway" | "off_runway"</span><br/>
+&nbsp;&nbsp;"touchdown_coordinates": { "latitude": 40.77665, "longitude": -73.87185 },<br/>
+&nbsp;&nbsp;"airport": { "icao": "KLGA", "iata": "LGA", "name": "LaGuardia Airport", "elevation_ft": 21 },<br/>
+&nbsp;&nbsp;"touchdown": {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"on_runway": true,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"runway_ident": "22",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"runway_pair": "04/22",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"runway_heading_deg": 212,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"surface": "asphalt",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"length_ft": 7002,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"width_ft": 150,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"centerline_deviation": {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"deviation_ft": -12.4, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color:var(--text-sec)">// Negative = Left, Positive = Right</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"deviation_m": -3.78,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"side": "left", &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<span style="color:var(--text-sec)">// "left" | "right" | "center"</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"text": "12.4 ft left"<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;},<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"threshold_distance": {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"distance_from_threshold_ft": 1450.2,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"distance_from_threshold_m": 442.0,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"touchdown_zone": "TDZ", &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color:var(--text-sec)">// "TDZ" | "TZ2" | "TZ3" | "Beyond TDZ"</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"remaining_runway_ft": 5551.8,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"remaining_runway_m": 1692.2,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"percent_runway_used": 20.7<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;},<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"wind": {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"headwind_kt": 8.2,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"crosswind_kt": -3.1,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"summary": "Headwind 8.2kt, 3.1kt from left"<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;},<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"flight_telemetry": {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"vertical_speed_fpm": -135,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"ias_kt": 132,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"g_force": 1.14,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"landing_rating": "✨ Good Landing" &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color:var(--text-sec)">// "🧈 Butter Smooth" | "✨ Good" | "👌 Firm" | "⚠️ Hard"</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br/>
+&nbsp;&nbsp;},<br/>
+&nbsp;&nbsp;"all_runways": [<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;{ "runway": "04/22", "length_ft": 7002, "active_end": "22", "on_runway": true, "deviation_ft": -12.4, "distance_from_threshold_ft": 1450.2, "touchdown_zone": "TDZ" },<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;{ "runway": "13/31", "length_ft": 7002, "active_end": "13", "on_runway": false, "deviation_ft": 756.5, "distance_from_threshold_ft": 2658.4, "touchdown_zone": "TZ3" }<br/>
+&nbsp;&nbsp;],<br/>
+&nbsp;&nbsp;"weather": { "metar_raw": "KLGA 222051Z 06011KT 10SM...", "atis_raw": "LGA ATIS INFO X..." }<br/>
+}
+        </div>
+      </div>
+
+      <!-- Fetch Code Snippets -->
+      <div class="card">
+        <div class="card-title">💻 Code Examples (JavaScript / TypeScript &amp; Python)</div>
+        
+        <p style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:6px;">JavaScript / TypeScript (Fetch &amp; Array Parsing)</p>
+        <div style="font-family:var(--font-mono);font-size:11.5px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;padding:12px;color:var(--text-mono);margin-bottom:14px;line-height:1.6;">
+const API_URL = 'https://your-server.com';<br/>
+const API_KEY = 'rwy_your_key_here';<br/>
+<br/>
+async function submitTouchdown(lat, lon, fpm, ias) {<br/>
+&nbsp;&nbsp;const res = await fetch(`${API_URL}/api/v1/touchdown`, {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;method: 'POST',<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;headers: {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'Content-Type': 'application/json',<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'X-API-Key': API_KEY<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;},<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;body: JSON.stringify({ lat, lon, vertical_speed_fpm: fpm, ias_kt: ias })<br/>
+&nbsp;&nbsp;});<br/>
+<br/>
+&nbsp;&nbsp;const data = await res.json();<br/>
+&nbsp;&nbsp;if (data.touchdown) {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;console.log(`🛬 Landed on Runway ${data.touchdown.runway_ident}`);<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;console.log(`📐 Centerline: ${data.touchdown.centerline_deviation.text}`);<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;console.log(`📏 Threshold: ${data.touchdown.threshold_distance.distance_from_threshold_ft} ft`);<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;console.log(`⭐ Rating: ${data.touchdown.flight_telemetry.landing_rating}`);<br/>
+&nbsp;&nbsp;}<br/>
+<br/>
+&nbsp;&nbsp;<span style="color:var(--text-sec)">// Iterate all runways array:</span><br/>
+&nbsp;&nbsp;data.all_runways.forEach(r => {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;console.log(`Runway ${r.runway}: ${r.length_ft}ft (${r.surface}) - Deviation: ${r.deviation_ft}ft`);<br/>
+&nbsp;&nbsp;});<br/>
+}
+        </div>
+
+        <p style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px;">Python (requests)</p>
+        <div style="font-family:var(--font-mono);font-size:11.5px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;padding:12px;color:var(--text-mono);line-height:1.6;">
+import requests<br/>
+<br/>
+resp = requests.post(<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"https://your-server.com/api/v1/touchdown",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;headers={"X-API-Key": "rwy_your_key_here", "Content-Type": "application/json"},<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;json={"lat": 40.77665, "lon": -73.87185, "vertical_speed_fpm": -135, "ias_kt": 132}<br/>
+)<br/>
+data = resp.json()<br/>
+<br/>
+if "touchdown" in data and data["touchdown"]:<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;td = data["touchdown"]<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;print(f"Runway: {td['runway_ident']} | Deviation: {td['centerline_deviation']['text']}")<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;print(f"Threshold: {td['threshold_distance']['distance_from_threshold_ft']} ft | Rating: {td['flight_telemetry']['landing_rating']}")
         </div>
       </div>
     </div>

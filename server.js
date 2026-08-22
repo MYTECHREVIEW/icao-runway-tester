@@ -2600,6 +2600,183 @@ app.post('/admin/api/deploy', requireAdminKey, async (req, res) => {
     }
 });
 
+
+/**
+ * POST /api/v1/touchdown
+ * Comprehensive Touchdown GPS Telemetry Analyzer.
+ * 
+ * Body: {
+ *   lat: number (required),
+ *   lon: number (required),
+ *   heading?: number,
+ *   vertical_speed_fpm?: number,
+ *   ias_kt?: number,
+ *   g_force?: number,
+ *   bank_deg?: number,
+ *   pitch_deg?: number,
+ *   icao?: string
+ * }
+ */
+app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
+    try {
+        let { lat, lon, heading, vertical_speed_fpm, ias_kt, g_force, bank_deg, pitch_deg, icao } = req.body;
+
+        if (typeof lat !== 'number' || typeof lon !== 'number') {
+            return res.status(400).json({ error: 'lat and lon must be numbers representing GPS decimal coordinates' });
+        }
+
+        // Query spatial grids
+        const candidateRunways = findNearbyGridItems(runwayGrid, lat, lon, 0.25);
+        const candidateAirports = findNearbyGridItems(airportGrid, lat, lon, 0.30);
+
+        let selectedAirportIcao = (icao || '').toUpperCase().trim();
+        if (!selectedAirportIcao && candidateAirports.length > 0) {
+            candidateAirports.sort((a, b) => haversine(lat, lon, a.latitude, a.longitude) - haversine(lat, lon, b.latitude, b.longitude));
+            selectedAirportIcao = candidateAirports[0].icao;
+        }
+
+        const primaryAirport = selectedAirportIcao ? airportsDb[selectedAirportIcao] : null;
+
+        // Operational Weather & ATIS context
+        let operationalCtx = null;
+        let weatherSources = {};
+        if (selectedAirportIcao) {
+            try {
+                weatherSources = await fetchAllAirportSources(selectedAirportIcao);
+                operationalCtx = resolveActiveOperational(weatherSources, 'real_world');
+            } catch (wErr) {
+                console.warn('Weather fetch warning in /api/v1/touchdown:', wErr.message);
+            }
+        }
+
+        // Analyze all runways within scope
+        const airportElev = primaryAirport?.elevation_ft ? parseInt(primaryAirport.elevation_ft) : null;
+        const analyzedRunways = [];
+
+        const airportRunways = selectedAirportIcao && runwaysByIcao[selectedAirportIcao] ? runwaysByIcao[selectedAirportIcao] : candidateRunways;
+
+        for (const rwy of airportRunways) {
+            const result = analyzeRunwayLanding(lat, lon, rwy, operationalCtx, airportElev);
+            if (!result) continue;
+
+            const midLat = ((rwy.le_latitude || 0) + (rwy.he_latitude || 0)) / 2;
+            const midLon = ((rwy.le_longitude || 0) + (rwy.he_longitude || 0)) / 2;
+            const dist = (rwy.le_latitude && rwy.he_latitude) ? haversine(lat, lon, midLat, midLon) : 99999;
+
+            analyzedRunways.push({
+                airport_icao: rwy.airport_icao,
+                le_ident: rwy.le_ident,
+                he_ident: rwy.he_ident,
+                length_ft: rwy.length_ft,
+                length_m: rwy.length_m || (rwy.length_ft ? Math.round(rwy.length_ft * 0.3048) : null),
+                width_ft: rwy.width_ft,
+                width_m: rwy.width_ft ? Math.round(rwy.width_ft * 0.3048) : null,
+                surface: rwy.surface,
+                lighted: !!rwy.lighted,
+                dist_to_midpoint_m: Math.round(dist),
+                is_closed: result.is_closed,
+                closure_reason: result.closure_reason,
+                analysis: result
+            });
+        }
+
+        analyzedRunways.sort((a, b) => {
+            if (a.analysis.on_runway !== b.analysis.on_runway) return a.analysis.on_runway ? -1 : 1;
+            return a.dist_to_midpoint_m - b.dist_to_midpoint_m;
+        });
+
+        const activeOnRunway = analyzedRunways.find(r => r.analysis.on_runway) || null;
+        const activeRunway = activeOnRunway || (analyzedRunways.length > 0 ? analyzedRunways[0] : null);
+
+        // Derive landing quality rating if vertical speed or g-force is provided
+        let landingRating = null;
+        if (typeof vertical_speed_fpm === 'number') {
+            const vs = Math.abs(vertical_speed_fpm);
+            if (vs < 80) landingRating = '🧈 Butter Smooth';
+            else if (vs < 160) landingRating = '✨ Good Landing';
+            else if (vs < 260) landingRating = '👌 Acceptable / Firm';
+            else if (vs < 400) landingRating = '⚠️ Hard Landing';
+            else landingRating = '💥 Severe Impact';
+        }
+
+        let touchdownSummary = null;
+        if (activeRunway && activeRunway.analysis) {
+            const a = activeRunway.analysis;
+            touchdownSummary = {
+                on_runway: a.on_runway,
+                runway_ident: a.runway_end_ident,
+                runway_pair: `${activeRunway.le_ident}/${activeRunway.he_ident}`,
+                runway_heading_deg: a.runway_heading_deg,
+                surface: activeRunway.surface || 'Unknown',
+                length_ft: activeRunway.length_ft,
+                width_ft: activeRunway.width_ft,
+                centerline_deviation: {
+                    deviation_ft: a.deviation_ft,
+                    deviation_m: a.deviation_m,
+                    side: a.side, // 'center', 'left', 'right'
+                    text: Math.abs(a.deviation_ft) < 1.5 ? 'Centerline' : `${Math.abs(a.deviation_ft)} ft ${a.side}`
+                },
+                threshold_distance: {
+                    distance_from_threshold_ft: a.distance_from_threshold_ft,
+                    distance_from_threshold_m: a.distance_from_threshold_m,
+                    touchdown_zone: a.touchdown_zone,
+                    remaining_runway_ft: a.remaining_ft,
+                    remaining_runway_m: a.remaining_m,
+                    percent_runway_used: a.pct_runway_used
+                },
+                wind: {
+                    headwind_kt: a.headwind_kt,
+                    crosswind_kt: a.crosswind_kt,
+                    summary: a.headwind_kt !== null ? `${a.headwind_kt >= 0 ? 'Headwind' : 'Tailwind'} ${Math.abs(a.headwind_kt)}kt, ${Math.abs(a.crosswind_kt || 0)}kt ${(a.crosswind_kt || 0) < 0 ? 'from left' : 'from right'}` : 'No wind data'
+                },
+                flight_telemetry: {
+                    aircraft_heading_deg: typeof heading === 'number' ? heading : null,
+                    vertical_speed_fpm: typeof vertical_speed_fpm === 'number' ? vertical_speed_fpm : null,
+                    ias_kt: typeof ias_kt === 'number' ? ias_kt : null,
+                    g_force: typeof g_force === 'number' ? g_force : null,
+                    bank_deg: typeof bank_deg === 'number' ? bank_deg : null,
+                    pitch_deg: typeof pitch_deg === 'number' ? pitch_deg : null,
+                    landing_rating: landingRating
+                }
+            };
+        }
+
+        res.json({
+            status: activeOnRunway ? 'on_runway' : (activeRunway?.analysis?.near_runway ? 'near_runway' : 'off_runway'),
+            touchdown_coordinates: { latitude: lat, longitude: lon },
+            airport: primaryAirport ? {
+                icao: primaryAirport.icao,
+                iata: primaryAirport.iata || null,
+                name: primaryAirport.name,
+                city: primaryAirport.city || null,
+                country: primaryAirport.country || null,
+                elevation_ft: airportElev
+            } : null,
+            touchdown: touchdownSummary,
+            all_runways: analyzedRunways.map(r => ({
+                runway: `${r.le_ident}/${r.he_ident}`,
+                length_ft: r.length_ft,
+                width_ft: r.width_ft,
+                surface: r.surface,
+                active_end: r.analysis.runway_end_ident,
+                on_runway: r.analysis.on_runway,
+                deviation_ft: r.analysis.deviation_ft,
+                distance_from_threshold_ft: r.analysis.distance_from_threshold_ft,
+                touchdown_zone: r.analysis.touchdown_zone,
+                headwind_kt: r.analysis.headwind_kt,
+                crosswind_kt: r.analysis.crosswind_kt
+            })),
+            weather: {
+                metar_raw: weatherSources.metar?.text || null,
+                atis_raw: (weatherSources.real_world || weatherSources.vatsim || weatherSources.ivao)?.text || null
+            }
+        });
+    } catch (err) {
+        console.error('Error in /api/v1/touchdown:', err);
+        res.status(500).json({ error: 'Touchdown analysis error: ' + err.message });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`\n🗺  ICAO Runway Tester running at: http://localhost:${PORT}`);
 });
