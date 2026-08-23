@@ -1,3 +1,19 @@
+
+function destinationPoint(lat, lon, brngDeg, distM) {
+    const R = 6371000;
+    const brng = brngDeg * Math.PI / 180;
+    const latRad = lat * Math.PI / 180;
+    const lonRad = lon * Math.PI / 180;
+    const lat2 = Math.asin(Math.sin(latRad) * Math.cos(distM / R) +
+                           Math.cos(latRad) * Math.sin(distM / R) * Math.cos(brng));
+    const lon2 = lonRad + Math.atan2(Math.sin(brng) * Math.sin(distM / R) * Math.cos(latRad),
+                                     Math.cos(distM / R) - Math.sin(latRad) * Math.sin(lat2));
+    return {
+        latitude: lat2 * 180 / Math.PI,
+        longitude: lon2 * 180 / Math.PI
+    };
+}
+
 /**
  * server.js — ICAO Runway Tester API Server
  *
@@ -2480,6 +2496,11 @@ app.get('/admin', (req, res) => {
     if (!fs.existsSync(adminHtmlPath)) {
         return res.status(404).send('Admin panel not found. Ensure public/admin.html exists.');
     }
+    res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+    });
     res.sendFile(adminHtmlPath);
 });
 
@@ -2626,23 +2647,124 @@ app.post('/admin/api/deploy', requireAdminKey, async (req, res) => {
  * }
  */
 
-// ── Destination Point Geodesic Helper ──────────────────────────────────────────
-function destinationPoint(lat, lon, brngDeg, distM) {
-    const R = 6371000;
-    const brng = brngDeg * Math.PI / 180;
-    const latRad = lat * Math.PI / 180;
-    const lonRad = lon * Math.PI / 180;
-    const lat2 = Math.asin(Math.sin(latRad) * Math.cos(distM / R) +
-                           Math.cos(latRad) * Math.sin(distM / R) * Math.cos(brng));
-    const lon2 = lonRad + Math.atan2(Math.sin(brng) * Math.sin(distM / R) * Math.cos(latRad),
-                                     Math.cos(distM / R) - Math.sin(latRad) * Math.sin(lat2));
-    return {
-        latitude: lat2 * 180 / Math.PI,
-        longitude: lon2 * 180 / Math.PI
-    };
+
+// ── Build Runway GeoJSON Overlay (Runway Polygon, Centerline, Deviation Vector & Dot) ──
+function buildRunwayGeoJsonOverlay(lat, lon, activeRunway) {
+    const cleanLat = parseFloat(lat);
+    const cleanLon = parseFloat(lon);
+
+    if (!activeRunway || !activeRunway.le_latitude || !activeRunway.he_latitude) {
+        return {
+            type: 'FeatureCollection',
+            features: [
+                {
+                    type: 'Feature',
+                    properties: { name: 'Touchdown Point', 'marker-color': 'ff1e42', 'marker-size': 'small' },
+                    geometry: { type: 'Point', coordinates: [cleanLon, cleanLat] }
+                }
+            ]
+        };
+    }
+
+    const rwy = activeRunway;
+    const halfWidthM = ((rwy.width_ft || 150) * 0.3048) / 2;
+    const brng = rwy.centerline_bearing_deg || 0;
+
+    const c1 = destinationPoint(rwy.le_latitude, rwy.le_longitude, brng - 90, halfWidthM);
+    const c2 = destinationPoint(rwy.le_latitude, rwy.le_longitude, brng + 90, halfWidthM);
+    const c3 = destinationPoint(rwy.he_latitude, rwy.he_longitude, brng + 90, halfWidthM);
+    const c4 = destinationPoint(rwy.he_latitude, rwy.he_longitude, brng - 90, halfWidthM);
+
+    const a = rwy.analysis || {};
+    const dt_m = ((a.end_code === 'le' ? rwy.le_displaced_threshold_ft : rwy.he_displaced_threshold_ft) || 0) * 0.3048;
+    const totalAlongM = (a.distance_from_threshold_m || 0) + dt_m;
+    const originLat = a.end_code === 'le' ? rwy.le_latitude : rwy.he_latitude;
+    const originLon = a.end_code === 'le' ? rwy.le_longitude : rwy.he_longitude;
+    const rwyHdg = a.runway_heading_deg || brng;
+    const projPoint = destinationPoint(originLat, originLon, rwyHdg, totalAlongM);
+
+    const features = [
+        // 1. Runway Outline Polygon
+        {
+            type: 'Feature',
+            properties: {
+                name: `Runway ${rwy.le_ident || ''}/${rwy.he_ident || ''}`,
+                stroke: '#00ff88',
+                'stroke-width': 2,
+                fill: '#00ff88',
+                'fill-opacity': 0.16
+            },
+            geometry: {
+                type: 'Polygon',
+                coordinates: [[
+                    [c1.longitude, c1.latitude],
+                    [c2.longitude, c2.latitude],
+                    [c3.longitude, c3.latitude],
+                    [c4.longitude, c4.latitude],
+                    [c1.longitude, c1.latitude]
+                ]]
+            }
+        },
+        // 2. White Runway Centerline
+        {
+            type: 'Feature',
+            properties: {
+                name: 'Centerline',
+                stroke: '#ffffff',
+                'stroke-width': 2,
+                'stroke-opacity': 0.85
+            },
+            geometry: {
+                type: 'LineString',
+                coordinates: [
+                    [rwy.le_longitude, rwy.le_latitude],
+                    [rwy.he_longitude, rwy.he_latitude]
+                ]
+            }
+        }
+    ];
+
+    // 3. Centerline Deviation Vector (if deviation exists)
+    if (a.deviation_ft && Math.abs(a.deviation_ft) > 0.5) {
+        features.push({
+            type: 'Feature',
+            properties: {
+                name: 'Centerline Deviation Vector',
+                deviation_ft: a.deviation_ft,
+                deviation_m: a.deviation_m,
+                side: a.side,
+                stroke: '#ff1e42',
+                'stroke-width': 3.5,
+                'stroke-opacity': 1.0
+            },
+            geometry: {
+                type: 'LineString',
+                coordinates: [
+                    [cleanLon, cleanLat],
+                    [projPoint.longitude, projPoint.latitude]
+                ]
+            }
+        });
+    }
+
+    // 4. Touchdown Marker Point
+    features.push({
+        type: 'Feature',
+        properties: {
+            name: 'Touchdown Point',
+            'marker-color': 'ff1e42',
+            'marker-size': 'small'
+        },
+        geometry: {
+            type: 'Point',
+            coordinates: [cleanLon, cleanLat]
+        }
+    });
+
+    return { type: 'FeatureCollection', features };
 }
 
-// ── Mapbox Static Map Generator with Runway Polygon & Deviation Overlay ────────
+// ── Mapbox Static Map Generator ───────────────────────────────────────────────
 function buildMapboxStaticUrl({
     lat,
     lon,
@@ -2675,103 +2797,11 @@ function buildMapboxStaticUrl({
     const cleanLat = parseFloat(lat);
     const cleanLon = parseFloat(lon);
 
-    // If an active runway is present, build rich GeoJSON overlay (Runway Polygon + Centerline + Deviation Line + Touchdown Point)
-    if (activeRunway && activeRunway.le_latitude && activeRunway.he_latitude) {
-        const rwy = activeRunway;
-        const halfWidthM = ((rwy.width_ft || 150) * 0.3048) / 2;
-        const brng = rwy.centerline_bearing_deg || 0;
-
-        const c1 = destinationPoint(rwy.le_latitude, rwy.le_longitude, brng - 90, halfWidthM);
-        const c2 = destinationPoint(rwy.le_latitude, rwy.le_longitude, brng + 90, halfWidthM);
-        const c3 = destinationPoint(rwy.he_latitude, rwy.he_longitude, brng + 90, halfWidthM);
-        const c4 = destinationPoint(rwy.he_latitude, rwy.he_longitude, brng - 90, halfWidthM);
-
-        const a = rwy.analysis || {};
-        const dt_m = ((a.end_code === 'le' ? rwy.le_displaced_threshold_ft : rwy.he_displaced_threshold_ft) || 0) * 0.3048;
-        const totalAlongM = (a.distance_from_threshold_m || 0) + dt_m;
-        const originLat = a.end_code === 'le' ? rwy.le_latitude : rwy.he_latitude;
-        const originLon = a.end_code === 'le' ? rwy.le_longitude : rwy.he_longitude;
-        const rwyHdg = a.runway_heading_deg || brng;
-        const projPoint = destinationPoint(originLat, originLon, rwyHdg, totalAlongM);
-
-        const features = [
-            // 1. Runway Outline Polygon
-            {
-                type: 'Feature',
-                properties: { 'stroke': '#00ff88', 'stroke-width': 2, 'fill': '#00ff88', 'fill-opacity': 0.16 },
-                geometry: {
-                    type: 'Polygon',
-                    coordinates: [[
-                        [c1.longitude, c1.latitude],
-                        [c2.longitude, c2.latitude],
-                        [c3.longitude, c3.latitude],
-                        [c4.longitude, c4.latitude],
-                        [c1.longitude, c1.latitude]
-                    ]]
-                }
-            },
-            // 2. White Runway Centerline
-            {
-                type: 'Feature',
-                properties: { 'stroke': '#ffffff', 'stroke-width': 2, 'stroke-opacity': 0.85 },
-                geometry: {
-                    type: 'LineString',
-                    coordinates: [
-                        [rwy.le_longitude, rwy.le_latitude],
-                        [rwy.he_longitude, rwy.he_latitude]
-                    ]
-                }
-            }
-        ];
-
-        // 3. Centerline Deviation Line (if deviation exists)
-        if (a.deviation_ft && Math.abs(a.deviation_ft) > 0.5) {
-            features.push({
-                type: 'Feature',
-                properties: { 'stroke': '#ff1e42', 'stroke-width': 3.5, 'stroke-opacity': 1.0 },
-                geometry: {
-                    type: 'LineString',
-                    coordinates: [
-                        [cleanLon, cleanLat],
-                        [projPoint.longitude, projPoint.latitude]
-                    ]
-                }
-            });
-        }
-
-        // 4. Touchdown Marker Point
-        features.push({
-            type: 'Feature',
-            properties: { 'marker-color': 'ff1e42', 'marker-size': 'small' },
-            geometry: {
-                type: 'Point',
-                coordinates: [cleanLon, cleanLat]
-            }
-        });
-
-        const geojsonStr = encodeURIComponent(JSON.stringify({ type: 'FeatureCollection', features }));
-        return `https://api.mapbox.com/styles/v1/${styleId}/static/geojson(${geojsonStr})/${cleanLon.toFixed(6)},${cleanLat.toFixed(6)},${z},${b},${p}/${w}x${h}${retinaStr}?access_token=${token}`;
-    }
-
-    const overlay = markerColor
-        ? `pin-s+${markerColor.replace('#', '')}(${cleanLon.toFixed(6)},${cleanLat.toFixed(6)})`
-        : '';
-    const overlayPart = overlay ? `${overlay}/` : '';
-
-    return `https://api.mapbox.com/styles/v1/${styleId}/static/${overlayPart}${cleanLon.toFixed(6)},${cleanLat.toFixed(6)},${z},${b},${p}/${w}x${h}${retinaStr}?access_token=${token}`;
+    const geojsonObj = buildRunwayGeoJsonOverlay(cleanLat, cleanLon, activeRunway);
+    const geojsonStr = encodeURIComponent(JSON.stringify(geojsonObj));
+    return `https://api.mapbox.com/styles/v1/${styleId}/static/geojson(${geojsonStr})/${cleanLon.toFixed(6)},${cleanLat.toFixed(6)},${z},${b},${p}/${w}x${h}${retinaStr}?access_token=${token}`;
 }
 
-/**
- * GET /api/v1/map/static
- * Mapbox Static Map Image Endpoint.
- * Supports:
- *   ?lat=40.77665&lon=-73.87185
- *   &zoom=17.5 (default: 17.5)
- *   &width=800&height=500 (max: 1280)
- *   &bearing=212&pitch=25 (optional 3D perspective)
- *   &style=satellite | dark | satellite-streets | streets
- *   &format=image | json | redirect (default: stream image)
- */
 app.get('/api/v1/map/static', requireApiKey, async (req, res) => {
     try {
         const lat = parseFloat(req.query.lat);
@@ -2983,6 +3013,7 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
         const isOffAirfield = !activeOnRunway && !activeRunway?.analysis?.near_runway && (distToAirportM > 3500);
         const distToAirportNm = Math.round((distToAirportM / 1852) * 10) / 10;
 
+        const geojsonOverlay = buildRunwayGeoJsonOverlay(lat, lon, activeRunway);
         const staticMapData = {
             satellite_url: buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, style: 'satellite-v9', activeRunway }),
             runway_perspective_url: activeRunway?.analysis?.runway_heading_deg != null
@@ -2991,6 +3022,8 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
             dark_mode_url: buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, style: 'dark-v11', activeRunway }),
             direct_image_api: `/api/v1/map/static?lat=${lat}&lon=${lon}&zoom=16&style=satellite`
         };
+
+        const liveMapUrl = `/?lat=${lat}&lon=${lon}&zoom=18`;
 
         if (isOffAirfield) {
             return res.json({
@@ -3006,7 +3039,9 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
                     distance_nm: distToAirportNm,
                     distance_km: Math.round((distToAirportM / 1000) * 10) / 10
                 } : null,
+                live_map_url: liveMapUrl,
                 static_map: staticMapData,
+                geojson_overlay: geojsonOverlay,
                 message: primaryAirport
                     ? `Touchdown located off-airfield near ${primaryAirport.icao} (${primaryAirport.name}, ${distToAirportNm} NM away).`
                     : `Touchdown located at non-airfield coordinates: ${lat}, ${lon}.`
@@ -3025,7 +3060,9 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
                 elevation_ft: airportElev
             } : null,
             touchdown: touchdownSummary,
+            live_map_url: liveMapUrl,
             static_map: staticMapData,
+            geojson_overlay: geojsonOverlay,
             all_runways: analyzedRunways.map(r => ({
                 runway: `${r.le_ident}/${r.he_ident}`,
                 length_ft: r.length_ft,

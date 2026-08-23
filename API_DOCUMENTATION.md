@@ -24,6 +24,43 @@ High-precision runway touchdown telemetry, certified geodetic runway data, multi
 
 ---
 
+
+---
+
+## 🛬 Runway Highlight Overlay, Centerline Deviation Vector & Touchdown Dot
+
+When touchdown coordinates are submitted via the API (`POST /api/v1/touchdown`), URL deep-linking (`?touchdown=lat,lon`), or `postMessage`, both the **Interactive Web Map** and the **Mapbox Static Images** automatically generate a visual runway overlay:
+
+### 1. Visual Elements Rendered
+
+| Visual Element | Color & Styling | Description |
+|---|---|---|
+| **Runway Highlight Overlay** | 🟢 Emerald Green (`#00ff88`, 16% fill opacity, 2px border) | Highlights the surveyed active runway boundary and threshold geometry. |
+| **Runway Centerline** | ⚪ Crisp White (`#ffffff`, 2px width) | Traces the certified geodetic centerline from threshold to threshold. |
+| **Touchdown Target Dot** | 🔴 Fire Red (`#ff1e42`, white center core, glowing reticle) | Centered precision target dot showing the exact GPS touchdown coordinates. |
+| **Centerline Deviation Line** | 🔴 Fire Red Dashed Vector (`#ff1e42`, 3.5px width) | Connects the touchdown dot perpendicularly to the exact centerline intersection point. |
+| **Centerline Intersection Dot** | 🟢 White with Green Ring (`#00ff88`) | Marks the perpendicular projection point along the runway centerline. |
+| **Floating Deviation Badge** | 🏷️ High-Contrast Badge (`📐 12.4 ft LEFT`) | Displays the exact cross-track deviation distance and side. |
+
+---
+
+### 2. Static Map Image Integration (`GET /api/v1/map/static` & `POST /api/v1/touchdown`)
+
+Every static image generated via the API embeds a **GeoJSON FeatureCollection overlay** rendering the entire runway boundary polygon, white centerline, Fire Red deviation line, and touchdown dot directly on high-resolution Mapbox satellite imagery at a calibrated zoom level (**Zoom 16**):
+
+```http
+GET /api/v1/map/static?lat=40.77665&lon=-73.87185&zoom=16&bearing=212&pitch=25
+X-API-Key: rwy_your_api_key_here
+```
+
+#### Embedded GeoJSON Features in Static Image URL:
+- **Feature 1 (Runway Polygon)**: `stroke: "#00ff88"`, `fill: "#00ff88"`, `fill-opacity: 0.16`
+- **Feature 2 (Centerline)**: `stroke: "#ffffff"`, `stroke-width: 2`
+- **Feature 3 (Deviation Vector)**: `stroke: "#ff1e42"`, `stroke-width: 3.5`
+- **Feature 4 (Touchdown Marker)**: `marker-color: "ff1e42"`, `marker-size: "small"`
+
+---
+
 ## 🔑 Authentication
 
 All `/api/v1/*` endpoints require an API Key passed in the `X-API-Key` HTTP header.

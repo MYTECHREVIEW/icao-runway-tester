@@ -17,6 +17,17 @@ High-precision ICAO runway touchdown analyzer with real-time FAA D-ATIS, VATSIM 
 
 ---
 
+
+### 🛬 Runway Highlight Overlay & Centerline Deviation Vector
+When touchdown coordinates are pushed via the API, URL parameters, or `postMessage`:
+- **🟢 Active Runway Polygon:** Luminous green boundary highlighting the surveyed runway pavement.
+- **⚪ Runway Centerline:** Crisp white surveyed centerline.
+- **🔴 Fire Red Touchdown Dot:** High-contrast pinpoint (`#ff1e42`) with center reticle.
+- **🔴 Centerline Deviation Vector:** Perpendicular dashed vector showing exact cross-track distance and side (e.g. `📐 12.4 ft LEFT`).
+- **🖼️ Embedded in Mapbox Static Images:** All static map images automatically embed the runway polygon and deviation vector at calibrated Zoom 16.
+
+---
+
 ## 📡 Developer REST API & Integration
 
 Complete, step-by-step developer documentation is available in [API_DOCUMENTATION.md](./API_DOCUMENTATION.md).
