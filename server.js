@@ -2627,6 +2627,118 @@ app.post('/admin/api/deploy', requireAdminKey, async (req, res) => {
  *   icao?: string
  * }
  */
+
+// ── Mapbox Static Map Generator ───────────────────────────────────────────────
+function buildMapboxStaticUrl({
+    lat,
+    lon,
+    zoom = 17.5,
+    width = 800,
+    height = 500,
+    bearing = 0,
+    pitch = 0,
+    style = 'satellite-v9',
+    markerColor = 'ff1e42',
+    retina = true
+}) {
+    const token = process.env.MAPBOX_TOKEN || DEFAULT_MB;
+    let styleId = style;
+    if (style === 'satellite') styleId = 'mapbox/satellite-v9';
+    else if (style === 'satellite-streets') styleId = 'mapbox/satellite-streets-v12';
+    else if (style === 'dark') styleId = 'mapbox/dark-v11';
+    else if (style === 'streets') styleId = 'mapbox/streets-v12';
+    else if (style === 'outdoors') styleId = 'mapbox/outdoors-v12';
+    else if (!styleId.includes('/')) styleId = `mapbox/${styleId}`;
+
+    const w = Math.min(1280, Math.max(100, parseInt(width) || 800));
+    const h = Math.min(1280, Math.max(100, parseInt(height) || 500));
+    const z = Math.min(22, Math.max(1, parseFloat(zoom) || 17.5));
+    const b = Math.min(360, Math.max(0, parseFloat(bearing) || 0));
+    const p = Math.min(60, Math.max(0, parseFloat(pitch) || 0));
+    const retinaStr = retina ? '@2x' : '';
+
+    const cleanLat = parseFloat(lat).toFixed(6);
+    const cleanLon = parseFloat(lon).toFixed(6);
+
+    const overlay = markerColor
+        ? `pin-s+${markerColor.replace('#', '')}(${cleanLon},${cleanLat})`
+        : '';
+    const overlayPart = overlay ? `${overlay}/` : '';
+
+    return `https://api.mapbox.com/styles/v1/${styleId}/static/${overlayPart}${cleanLon},${cleanLat},${z},${b},${p}/${w}x${h}${retinaStr}?access_token=${token}`;
+}
+
+/**
+ * GET /api/v1/map/static
+ * Mapbox Static Map Image Endpoint.
+ * Supports:
+ *   ?lat=40.77665&lon=-73.87185
+ *   &zoom=17.5 (default: 17.5)
+ *   &width=800&height=500 (max: 1280)
+ *   &bearing=212&pitch=25 (optional 3D perspective)
+ *   &style=satellite | dark | satellite-streets | streets
+ *   &format=image | json | redirect (default: stream image)
+ */
+app.get('/api/v1/map/static', requireApiKey, async (req, res) => {
+    try {
+        const lat = parseFloat(req.query.lat);
+        const lon = parseFloat(req.query.lon);
+
+        if (isNaN(lat) || isNaN(lon)) {
+            return res.status(400).json({ error: 'lat and lon query parameters are required numbers' });
+        }
+
+        const zoom = req.query.zoom || 17.5;
+        const width = req.query.width || 800;
+        const height = req.query.height || 500;
+        const bearing = req.query.bearing || req.query.heading || 0;
+        const pitch = req.query.pitch || 0;
+        const style = req.query.style || 'satellite-v9';
+        const markerColor = req.query.marker !== 'false' ? (req.query.marker || 'ff1e42') : null;
+        const retina = req.query.retina !== 'false';
+        const format = (req.query.format || 'image').toLowerCase();
+
+        const staticUrl = buildMapboxStaticUrl({
+            lat, lon, zoom, width, height, bearing, pitch, style, markerColor, retina
+        });
+
+        if (format === 'json') {
+            return res.json({
+                status: 'ok',
+                coordinates: { latitude: lat, longitude: lon },
+                zoom: parseFloat(zoom),
+                dimensions: { width: parseInt(width), height: parseInt(height) },
+                bearing: parseFloat(bearing),
+                pitch: parseFloat(pitch),
+                style,
+                image_url: staticUrl
+            });
+        }
+
+        if (format === 'redirect') {
+            return res.redirect(302, staticUrl);
+        }
+
+        // Default: Stream the image binary directly with cache headers
+        const imgResp = await fetch(staticUrl);
+        if (!imgResp.ok) {
+            return res.status(imgResp.status).json({ error: 'Failed to fetch static map from Mapbox' });
+        }
+
+        res.set({
+            'Content-Type': imgResp.headers.get('content-type') || 'image/png',
+            'Cache-Control': 'public, max-age=86400',
+            'Access-Control-Allow-Origin': '*'
+        });
+
+        const arrayBuffer = await imgResp.arrayBuffer();
+        return res.send(Buffer.from(arrayBuffer));
+    } catch (err) {
+        console.error('Error in /api/v1/map/static:', err);
+        res.status(500).json({ error: 'Static map error: ' + err.message });
+    }
+});
+
 app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
     try {
         let { lat, lon, heading, vertical_speed_fpm, ias_kt, g_force, bank_deg, pitch_deg, icao } = req.body;
@@ -2754,8 +2866,17 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
         const distToAirportM = (primaryAirport?.latitude && primaryAirport?.longitude)
             ? haversine(lat, lon, primaryAirport.latitude, primaryAirport.longitude)
             : 99999;
-        const isOffAirfield = !activeOnRunway && (distToAirportM > 3500 || !activeRunway?.analysis?.near_runway);
+        const isOffAirfield = !activeOnRunway && !activeRunway?.analysis?.near_runway && (distToAirportM > 3500);
         const distToAirportNm = Math.round((distToAirportM / 1852) * 10) / 10;
+
+        const staticMapData = {
+            satellite_url: buildMapboxStaticUrl({ lat, lon, zoom: 18, width: 800, height: 500, style: 'satellite-v9' }),
+            runway_perspective_url: activeRunway?.analysis?.runway_heading_deg != null
+                ? buildMapboxStaticUrl({ lat, lon, zoom: 18, width: 800, height: 500, bearing: activeRunway.analysis.runway_heading_deg, pitch: 25, style: 'satellite-v9' })
+                : null,
+            dark_mode_url: buildMapboxStaticUrl({ lat, lon, zoom: 18, width: 800, height: 500, style: 'dark-v11' }),
+            direct_image_api: `/api/v1/map/static?lat=${lat}&lon=${lon}&zoom=18&style=satellite`
+        };
 
         if (isOffAirfield) {
             return res.json({
@@ -2771,6 +2892,7 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
                     distance_nm: distToAirportNm,
                     distance_km: Math.round((distToAirportM / 1000) * 10) / 10
                 } : null,
+                static_map: staticMapData,
                 message: primaryAirport
                     ? `Touchdown located off-airfield near ${primaryAirport.icao} (${primaryAirport.name}, ${distToAirportNm} NM away).`
                     : `Touchdown located at non-airfield coordinates: ${lat}, ${lon}.`
@@ -2789,6 +2911,14 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
                 elevation_ft: airportElev
             } : null,
             touchdown: touchdownSummary,
+            static_map: {
+                satellite_url: buildMapboxStaticUrl({ lat, lon, zoom: 18, width: 800, height: 500, style: 'satellite-v9' }),
+                runway_perspective_url: activeRunway?.analysis?.runway_heading_deg != null
+                    ? buildMapboxStaticUrl({ lat, lon, zoom: 18, width: 800, height: 500, bearing: activeRunway.analysis.runway_heading_deg, pitch: 25, style: 'satellite-v9' })
+                    : null,
+                dark_mode_url: buildMapboxStaticUrl({ lat, lon, zoom: 18, width: 800, height: 500, style: 'dark-v11' }),
+                direct_image_api: `/api/v1/map/static?lat=${lat}&lon=${lon}&zoom=18&style=satellite`
+            },
             all_runways: analyzedRunways.map(r => ({
                 runway: `${r.le_ident}/${r.he_ident}`,
                 length_ft: r.length_ft,

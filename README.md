@@ -30,6 +30,7 @@ Complete, step-by-step developer documentation is available in [API_DOCUMENTATIO
 | `GET` | `/api/v1/airports/search?q=` | Search 85,917 airports by ICAO, IATA, name, or city. |
 | `GET` | `/api/v1/airport/:icao/weather` | Live operational weather suite: FAA D-ATIS, VATSIM ATIS, IVAO ATIS, and NOAA METAR. |
 | `GET` | `/api/v1/airport/:icao/notams` | Active airport NOTAMs and closed runway designator alerts. |
+| `GET` | `/api/v1/map/static?lat=&lon=` | **Mapbox Static Images:** Render high-res satellite or dark static image with Fire Red touchdown pinpoint. |
 
 ### Quick Example (cURL)
 
