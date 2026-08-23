@@ -1015,31 +1015,57 @@ input:checked + .slider:before {
   transform: translate(-50%, -50%);
 }
 
-/* ── Markers & Popup ─────────────────────────────────────────────────────── */
+/* ── Precision Touchdown Target Dot (Fire Red for High Contrast) ────────── */
 .pin-marker {
-  width: 28px;
-  height: 28px;
-  background: radial-gradient(circle at 35% 35%, #00d4ff, #0077b6);
+  width: 14px;
+  height: 14px;
+  background: #ff1e42;
   border: 2px solid #ffffff;
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
-  box-shadow: 0 4px 12px rgba(0, 212, 255, 0.6);
-  cursor: grab;
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(255, 30, 66, 0.95), 0 0 0 3.5px rgba(255, 30, 66, 0.45);
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+}
+
+/* Center crosshair pinpoint dot */
+.pin-marker::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 4px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
 }
 
 .pin-marker.on-runway {
-  background: radial-gradient(circle at 35% 35%, #00ff88, #00a859);
-  box-shadow: 0 4px 12px rgba(0, 255, 136, 0.7);
+  background: #ff1e42; /* Vibrant Fire Red - High contrast against green runway highlights */
+  border-color: #ffffff;
+  box-shadow: 0 0 16px rgba(255, 30, 66, 1), 0 0 0 4.5px rgba(255, 30, 66, 0.55);
 }
 
 .pin-marker.on-taxiway {
-  background: radial-gradient(circle at 35% 35%, #ffb800, #d4ac0d);
-  box-shadow: 0 4px 12px rgba(255, 184, 0, 0.7);
+  background: #ffb800; /* Amber for taxiways */
+  border-color: #ffffff;
+  box-shadow: 0 0 12px rgba(255, 184, 0, 0.95), 0 0 0 4px rgba(255, 184, 0, 0.45);
 }
 
 .pin-marker.closed-runway {
-  background: radial-gradient(circle at 35% 35%, #ff4757, #c0392b);
-  box-shadow: 0 4px 12px rgba(255, 71, 87, 0.7);
+  background: #dc2626; /* Deep Crimson */
+  border-color: #ffffff;
+  box-shadow: 0 0 16px rgba(220, 38, 38, 1), 0 0 0 4.5px rgba(220, 38, 38, 0.55);
+}
+
+.pin-marker.off-airfield {
+  background: #f97316; /* Fire Orange for Off-Airfield */
+  border-color: #ffffff;
+  box-shadow: 0 0 14px rgba(249, 115, 22, 1), 0 0 0 3.5px rgba(249, 115, 22, 0.45);
 }
 
 .leaflet-popup-content-wrapper {

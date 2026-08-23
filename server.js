@@ -1357,8 +1357,18 @@ app.post('/api/analyze', async (req, res) => {
         }
     }
 
+    // Off-airfield detection (distance > 3.5km from airport reference and not on runway/taxiway)
+    const distToAirportM = (primaryAirport?.latitude && primaryAirport?.longitude)
+        ? haversine(lat, lon, primaryAirport.latitude, primaryAirport.longitude)
+        : 99999;
+    const isOffAirfield = !onRunway && !onTaxiway && !isNearRunwayScope && (distToAirportM > 3500);
+    const distToAirportNm = Math.round((distToAirportM / 1852) * 10) / 10;
+
     res.json({
         lat, lon,
+        is_off_airfield: isOffAirfield,
+        distance_to_airport_m: Math.round(distToAirportM),
+        distance_to_airport_nm: distToAirportNm,
         airport: primaryAirport ? {
             icao: selectedAirportIcao,
             iata: primaryAirport.iata || null,
@@ -2739,6 +2749,32 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
                     landing_rating: landingRating
                 }
             };
+        }
+
+        const distToAirportM = (primaryAirport?.latitude && primaryAirport?.longitude)
+            ? haversine(lat, lon, primaryAirport.latitude, primaryAirport.longitude)
+            : 99999;
+        const isOffAirfield = !activeOnRunway && (distToAirportM > 3500 || !activeRunway?.analysis?.near_runway);
+        const distToAirportNm = Math.round((distToAirportM / 1852) * 10) / 10;
+
+        if (isOffAirfield) {
+            return res.json({
+                status: 'off_airfield',
+                touchdown_coordinates: { latitude: lat, longitude: lon },
+                nearest_airport: primaryAirport ? {
+                    label: `Near ${primaryAirport.icao} - ${primaryAirport.name}`,
+                    icao: primaryAirport.icao,
+                    iata: primaryAirport.iata || null,
+                    name: primaryAirport.name,
+                    city: primaryAirport.city || null,
+                    country: primaryAirport.country || null,
+                    distance_nm: distToAirportNm,
+                    distance_km: Math.round((distToAirportM / 1000) * 10) / 10
+                } : null,
+                message: primaryAirport
+                    ? `Touchdown located off-airfield near ${primaryAirport.icao} (${primaryAirport.name}, ${distToAirportNm} NM away).`
+                    : `Touchdown located at non-airfield coordinates: ${lat}, ${lon}.`
+            });
         }
 
         res.json({

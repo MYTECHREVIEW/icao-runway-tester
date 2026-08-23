@@ -135,8 +135,12 @@ function pushTouchdownCoordinates(lat, lon, opts = {}) {
         pinMarker.setLatLng([lat, lon]);
     }
 
-    const zoomLevel = opts.zoom || 16;
-    map.flyTo([lat, lon], zoomLevel, { duration: 1.2 });
+    const zoomLevel = opts.zoom || 18;
+    if (opts.animate) {
+        map.flyTo([lat, lon], zoomLevel, { duration: 1.0 });
+    } else {
+        map.setView([lat, lon], zoomLevel);
+    }
     analyzePoint(lat, lon, opts.icao || null);
 
     const fpmText = opts.fpm ? ` (VS: ${opts.fpm} fpm)` : '';
@@ -354,9 +358,55 @@ let showGates = true;
 let showStands = true;
 
 
+
+// ── Determine Initial Coordinates Synchronously (Zero KLGA Fallback on Direct GPS) ──
+const initialLocation = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const tdParam = params.get('touchdown') || params.get('td');
+    const latParam = params.get('lat') || params.get('latitude');
+    const lonParam = params.get('lon') || params.get('longitude') || params.get('lng');
+    const icaoParam = params.get('icao');
+    const fpmParam = params.get('fpm') || params.get('vs');
+    const iasParam = params.get('ias') || params.get('ias_kt');
+    const gParam = params.get('g') || params.get('g_force');
+    const hdgParam = params.get('hdg') || params.get('heading');
+    const zoomParam = params.get('zoom') || params.get('z');
+    const tdZoom = zoomParam ? parseInt(zoomParam, 10) : 18;
+
+    if (tdParam) {
+      const parts = tdParam.split(',');
+      if (parts.length === 2) {
+        const pLat = parseFloat(parts[0]);
+        const pLon = parseFloat(parts[1]);
+        if (!isNaN(pLat) && !isNaN(pLon)) {
+          return { type: 'touchdown', lat: pLat, lon: pLon, icao: icaoParam, fpm: fpmParam, ias: iasParam, g: gParam, hdg: hdgParam, zoom: tdZoom };
+        }
+      }
+    } else if (latParam && lonParam) {
+      const pLat = parseFloat(latParam);
+      const pLon = parseFloat(lonParam);
+      if (!isNaN(pLat) && !isNaN(pLon)) {
+        return { type: 'touchdown', lat: pLat, lon: pLon, icao: icaoParam, fpm: fpmParam, ias: iasParam, g: gParam, hdg: hdgParam, zoom: tdZoom };
+      }
+    } else if (icaoParam) {
+      return { type: 'icao', icao: icaoParam.toUpperCase().trim(), lat: 40.777, lon: -73.872, zoom: 15 };
+    }
+  } catch (e) {}
+
+  // Check saved cookie
+  const saved = loadLastAirport();
+  if (saved && saved.lat && saved.lon) {
+    return { type: 'saved', lat: saved.lat, lon: saved.lon, icao: saved.icao, name: saved.name, city: saved.city, zoom: 15 };
+  }
+
+  // Fallback default
+  return { type: 'default', lat: 40.777, lon: -73.872, icao: 'KLGA', zoom: 15 };
+})();
+
 const map = L.map('map', {
-  center: [40.777, -73.872],  // Default: KLGA
-  zoom: 16,
+  center: [initialLocation.lat, initialLocation.lon],
+  zoom: initialLocation.zoom || 16,
   layers: [fallbackGoogle, taxiRouteLayerGroup, editorLayerGroup, holdPointLayerGroup, ...(showTaxiways ? [taxiwayLayerGroup] : []), ...(showTerminals ? [terminalLayerGroup, gateLayerGroup, standLayerGroup] : [])],
   zoomControl: true
 });
@@ -409,18 +459,19 @@ setupPrecisionMapbox();
 
 // ── Marker Icon Factory ───────────────────────────────────────────────────────
 
-function pinIcon(onRunway, isClosed, onTaxiway) {
+function pinIcon(onRunway, isClosed, onTaxiway, isOffAirfield) {
   let cls = 'pin-marker';
   if (isClosed) cls += ' closed-runway';
   else if (onRunway) cls += ' on-runway';
   else if (onTaxiway) cls += ' on-taxiway';
+  else if (isOffAirfield) cls += ' off-airfield';
 
   return L.divIcon({
-    className: '',
+    className: 'aviation-sign-icon',
     html: `<div class="${cls}"></div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 28],
-    popupAnchor: [0, -30]
+    iconSize: [16, 16],
+    iconAnchor: [0, 0],
+    popupAnchor: [0, -12]
   });
 }
 
@@ -1078,18 +1129,21 @@ function updateResults(data) {
     airportCard.classList.remove('hidden');
     sourceControlPanel.classList.remove('hidden');
 
-    document.getElementById('cardIcao').textContent = airport.icao || '—';
+    const isOffAirfield = data.is_off_airfield;
+    const nearPrefix = isOffAirfield ? 'Near ' : '';
+    document.getElementById('cardIcao').textContent = (isOffAirfield ? 'NEAR ' : '') + (airport.icao || '—');
     const iataEl = document.getElementById('cardIata');
-    if (airport.iata) {
+    if (airport.iata && !isOffAirfield) {
       iataEl.textContent = airport.iata;
       iataEl.classList.remove('hidden');
     } else {
       iataEl.classList.add('hidden');
     }
-    document.getElementById('cardAirportName').textContent = airport.name || '—';
+    document.getElementById('cardAirportName').textContent = nearPrefix + (airport.name || '—');
     
     const locParts = [airport.city, airport.country_name || airport.country].filter(Boolean);
-    document.getElementById('cardLocation').textContent = locParts.join(', ') || 'Airport grounds';
+    const distText = isOffAirfield && data.distance_to_airport_nm ? ` (${data.distance_to_airport_nm} NM away)` : '';
+    document.getElementById('cardLocation').textContent = (locParts.join(', ') || 'Surrounding area') + distText;
 
     const elevFt = airport.elevation_ft;
     const elevM = airport.elevation_m;
@@ -1106,7 +1160,7 @@ function updateResults(data) {
   const nearbyList  = document.getElementById('nearbyList');
   nearbyList.innerHTML = '';
 
-  if (runways && runways.length > 0) {
+  if (runways && runways.length > 0 && !data.is_off_airfield) {
     nearbyPanel.classList.remove('hidden');
     
     const headerHtml = `
@@ -1383,6 +1437,36 @@ function updateResults(data) {
       `;
       pinMarker.bindPopup(popupHtml, { autoClose: false, closeOnClick: false, offset: [0, -10], maxWidth: 500 }).openPopup();
 
+    } else if (data.is_off_airfield && airport) {
+      // ── Clean Off-Airfield / Non-Airport Touchdown Popup ──────────────────
+      const locStr = [airport.city, airport.country_name || airport.country].filter(Boolean).join(', ') || 'Surrounding Region';
+      const distStr = data.distance_to_airport_nm ? `${data.distance_to_airport_nm} NM from ${airport.icao}` : '';
+
+      const popupHtml = `
+        <div class="pin-popup-card off-airfield-popup">
+          <div class="pin-popup-badge-row">
+            <span class="rwy-active-badge closed" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border-color: rgba(245, 158, 11, 0.5);">📍 Non-Airfield Landing</span>
+          </div>
+          <div class="pin-popup-name" style="font-size: 14px; font-weight: 800; color: #f1f5f9; margin: 6px 0;">
+            Near ${airport.icao} &bull; ${airport.name}
+          </div>
+          <div class="pin-popup-location" style="font-size: 11.5px; color: #94a3b8; margin-bottom: 8px;">
+            📍 ${locStr}${distStr ? ' &bull; ' + distStr : ''}
+          </div>
+          <div class="pin-popup-rwy-details" style="background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.08);">
+            <div class="rwy-metric-row">
+              <span class="rwy-metric-label">GPS Latitude</span>
+              <span class="rwy-metric-val font-mono">${data.lat.toFixed(6)}°</span>
+            </div>
+            <div class="rwy-metric-row">
+              <span class="rwy-metric-label">GPS Longitude</span>
+              <span class="rwy-metric-val font-mono">${data.lon.toFixed(6)}°</span>
+            </div>
+          </div>
+        </div>
+      `;
+      pinMarker.bindPopup(popupHtml, { autoClose: false, closeOnClick: false, offset: [0, -10], maxWidth: 420 }).openPopup();
+
     } else if (airport) {
       const locStr = [airport.city, airport.country_name || airport.country].filter(Boolean).join(', ') || 'Airport grounds';
       const elevStr = airport.elevation_ft !== null ? `${fmt(airport.elevation_ft)} ft (${fmt(airport.elevation_m)} m)` : '—';
@@ -1470,7 +1554,7 @@ async function analyzePoint(lat, lon, icao = null) {
     if (pinMarker) {
       const isClosed = (data.active_runway && (data.active_runway.is_closed || data.active_runway.analysis?.is_closed)) ||
                        (data.active_taxiway && data.active_taxiway.is_closed);
-      pinMarker.setIcon(pinIcon(data.on_runway, isClosed, data.on_taxiway));
+      pinMarker.setIcon(pinIcon(data.on_runway, isClosed, data.on_taxiway, data.is_off_airfield));
     }
 
   } catch (err) {
@@ -4441,54 +4525,29 @@ document.getElementById('airportSearch').addEventListener('keydown', (e) => {
 initControls();
 showLoading(false);
 
-// ── Startup: Check URL Parameters for Touchdown GPS, or Restore Last Airport ──
-(function checkUrlParamsAndStartup() {
-  const params = new URLSearchParams(window.location.search);
-  const tdParam = params.get('touchdown') || params.get('td');
-  const latParam = params.get('lat') || params.get('latitude');
-  const lonParam = params.get('lon') || params.get('longitude') || params.get('lng');
-  const icaoParam = params.get('icao');
-  const fpmParam = params.get('fpm') || params.get('vs');
-
-  // If URL has direct touchdown GPS coordinates:
-  if (tdParam) {
-    const parts = tdParam.split(',');
-    if (parts.length === 2) {
-      const pLat = parseFloat(parts[0]);
-      const pLon = parseFloat(parts[1]);
-      if (!isNaN(pLat) && !isNaN(pLon)) {
-        setTimeout(() => pushTouchdownCoordinates(pLat, pLon, { icao: icaoParam, fpm: fpmParam }), 400);
-        return;
-      }
-    }
-  } else if (latParam && lonParam) {
-    const pLat = parseFloat(latParam);
-    const pLon = parseFloat(lonParam);
-    if (!isNaN(pLat) && !isNaN(pLon)) {
-      setTimeout(() => pushTouchdownCoordinates(pLat, pLon, { icao: icaoParam, fpm: fpmParam }), 400);
-      return;
-    }
-  } else if (icaoParam) {
-    setTimeout(() => goToAirport(icaoParam), 400);
-    return;
-  }
-
-  // Otherwise restore last airport from cookie:
-  (function restoreLastAirport() {
-  const last = loadLastAirport();
-  if (last && last.icao && last.lat && last.lon) {
-    // (Pin removed on startup)
-    map.setView([last.lat, last.lon], 15);
-    analyzePoint(last.lat, last.lon, last.icao);
+// ── Startup: Execute Initial Load Directly at initialLocation (Zero Delay / Travel) ──
+(function executeStartup() {
+  if (initialLocation.type === 'touchdown') {
+    pushTouchdownCoordinates(initialLocation.lat, initialLocation.lon, {
+      instant: true,
+      animate: false,
+      icao: initialLocation.icao,
+      fpm: initialLocation.fpm,
+      ias: initialLocation.ias,
+      g: initialLocation.g,
+      hdg: initialLocation.hdg
+    });
+  } else if (initialLocation.type === 'icao') {
+    goToAirport(initialLocation.icao);
+  } else if (initialLocation.type === 'saved') {
+    analyzePoint(initialLocation.lat, initialLocation.lon, initialLocation.icao);
     setTimeout(function() {
-      const cityPart = last.city ? ' (' + last.city + ')' : '';
-      showEditorToast('✈️ Welcome back! Loaded ' + last.icao + cityPart + ' — ' + last.name, 4000);
+      const cityPart = initialLocation.city ? ' (' + initialLocation.city + ')' : '';
+      showEditorToast('✈️ Welcome back! Loaded ' + initialLocation.icao + cityPart + ' — ' + initialLocation.name, 4000);
     }, 1800);
   } else {
-    analyzePoint(40.777, -73.872, 'KLGA');
+    analyzePoint(initialLocation.lat, initialLocation.lon, 'KLGA');
   }
-})();
-
 })();
 
 console.log('🛬 ICAO Runway Analyzer ready with Taxiway and Runway Isolation.');
