@@ -1,6 +1,6 @@
 # ICAO Runway Analyzer & Touchdown Tester 🛬
 
-High-precision ICAO runway touchdown analyzer with real-time FAA D-ATIS, VATSIM Network ATIS, IVAO Network ATIS, and AviationWeather Live METAR feeds.
+High-precision ICAO runway touchdown analyzer with real-time FAA D-ATIS, VATSIM Network ATIS, IVAO Network ATIS, AviationWeather Live METAR feeds, and Mapbox Static Images API.
 
 ## 🚀 Features
 - **Accurate Geodetic Centerline Precision:** Certified FAA GIS survey coordinates (sub-decimeter accuracy).
@@ -12,6 +12,7 @@ High-precision ICAO runway touchdown analyzer with real-time FAA D-ATIS, VATSIM 
   - IVAO Global Network ATIS (`api.ivao.aero`)
   - NOAA AviationWeather Live METAR (`aviationweather.gov`)
 - **Developer REST API & Key Management:** Secure `/api/v1/*` endpoints for third-party flight sim apps, electronic flight bags (EFB), and loggers.
+- **Mapbox Static Map Images:** Generate high-resolution static landing snapshots with Fire Red pinpoint markers.
 - **Admin Control Panel:** Built-in `/admin` panel to generate, enable/disable, and monitor API keys.
 
 ---
@@ -24,13 +25,13 @@ Complete, step-by-step developer documentation is available in [API_DOCUMENTATIO
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/v1/touchdown` | **Core Landing Telemetry:** Analyzes landing point coordinates, calculates centerline deviation, threshold distance, touchdown zone, headwind/crosswind, and landing rating. |
+| `POST` | `/api/v1/touchdown` | **Core Landing Telemetry:** Evaluates touchdown coordinates, calculates centerline deviation, threshold distance, touchdown zone, headwind/crosswind, landing rating, and static map URLs. |
+| `GET` | `/api/v1/map/static` | **Mapbox Static Images:** Render high-res satellite or dark static image with Fire Red touchdown pinpoint. |
 | `GET` | `/api/v1/airport/:icao` | Full airport metadata, elevation, geographic coordinates, and classification. |
-| `GET` | `/api/v1/airport/:icao/runways` | All calibrated runways with coordinates, headings, length, width, and surface. |
+| `GET` | `/api/v1/airport/:icao/runways` | All calibrated runways with coordinates, true headings, length, width, and surface. |
 | `GET` | `/api/v1/airports/search?q=` | Search 85,917 airports by ICAO, IATA, name, or city. |
 | `GET` | `/api/v1/airport/:icao/weather` | Live operational weather suite: FAA D-ATIS, VATSIM ATIS, IVAO ATIS, and NOAA METAR. |
 | `GET` | `/api/v1/airport/:icao/notams` | Active airport NOTAMs and closed runway designator alerts. |
-| `GET` | `/api/v1/map/static?lat=&lon=` | **Mapbox Static Images:** Render high-res satellite or dark static image with Fire Red touchdown pinpoint. |
 
 ### Quick Example (cURL)
 
@@ -45,8 +46,7 @@ curl -X POST https://your-server.com/api/v1/touchdown \
     "heading": 212,
     "vertical_speed_fpm": -135,
     "ias_kt": 132,
-    "g_force": 1.14,
-    "icao": "KLGA"
+    "g_force": 1.14
   }'
 ```
 
@@ -55,7 +55,7 @@ External apps can open or embed the web map with touchdown coordinates automatic
 
 ```
 https://your-server.com/?touchdown=40.77665,-73.87185
-https://your-server.com/?lat=40.77665&lon=-73.87185&icao=KLGA&fpm=-135&ias=132&g=1.14
+https://your-server.com/?lat=40.77665&lon=-73.87185&icao=KLGA&fpm=-135&ias=132&g=1.14&zoom=18
 ```
 
 👉 **See the complete documentation with JavaScript, Python, C#, and Swift examples in [API_DOCUMENTATION.md](./API_DOCUMENTATION.md).**
