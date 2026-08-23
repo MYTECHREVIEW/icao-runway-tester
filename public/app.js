@@ -869,20 +869,33 @@ function drawRunways(data) {
     devLineLayer = L.polyline(
       [[data.lat, data.lon], [projLat, projLon]],
       {
-        color: '#ff4757',
-        weight: 2.5,
-        dashArray: '3,3',
-        opacity: 0.95
+        color: '#ff1e42',
+        weight: 3.5,
+        dashArray: '5,5',
+        opacity: 0.98
       }
     ).addTo(map);
+    runwayLayers.push(devLineLayer);
 
     const centerPoint = L.circleMarker([projLat, projLon], {
       radius: 4.5,
-      color: '#00ff88',
-      fillColor: '#ffffff',
-      fillOpacity: 1
+      color: '#ffffff',
+      fillColor: '#00ff88',
+      fillOpacity: 1,
+      weight: 2
     }).addTo(map);
     runwayLayers.push(centerPoint);
+
+    // Floating Deviation Badge on Map
+    if (a.deviation_ft && Math.abs(a.deviation_ft) > 0.5) {
+      const midLat = (data.lat + projLat) / 2;
+      const midLon = (data.lon + projLon) / 2;
+      const devBadgeHtml = `<div style="background: rgba(15,23,42,0.92); color: #ff1e42; font-weight: 800; font-size: 10.5px; padding: 2px 7px; border-radius: 4px; border: 1.5px solid #ff1e42; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.7); pointer-events: none;">📐 ${Math.abs(a.deviation_ft).toFixed(1)} ft ${(a.side || '').toUpperCase()}</div>`;
+      const devBadge = L.marker([midLat, midLon], {
+        icon: L.divIcon({ className: 'aviation-sign-icon', html: devBadgeHtml, iconSize: null, iconAnchor: [30, 10] })
+      }).addTo(map);
+      runwayLayers.push(devBadge);
+    }
   }
 
   // Draw Taxiway Layer

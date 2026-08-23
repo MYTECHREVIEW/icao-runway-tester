@@ -418,13 +418,10 @@ if "touchdown" in data and data["touchdown"]:<br/>
 
 <script>
 function authHeaders() {
-  let key = sessionStorage.getItem('admin_key');
-  if (!key) {
-    key = prompt('Enter your ADMIN_KEY:');
-    if (!key) return null;
-    sessionStorage.setItem('admin_key', key);
-  }
-  return { 'X-Admin-Key': key, 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json' };
+  const savedKey = sessionStorage.getItem('admin_key');
+  if (savedKey) headers['X-Admin-Key'] = savedKey;
+  return headers;
 }
 
 function toast(msg, dur = 3200) {

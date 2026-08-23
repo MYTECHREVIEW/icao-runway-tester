@@ -202,7 +202,7 @@ When the touchdown occurs outside an airfield or airstrip bounds:
 
 ### 2. Mapbox Static Landing Map Images (`GET /api/v1/map/static`)
 
-Generates a standalone, high-resolution static satellite or dark-mode screenshot with the Fire Red precision touchdown target dot.
+Generates a standalone, high-resolution static satellite or dark-mode screenshot with the **Runway Polygon Overlay, Runway Centerline, Centerline Deviation Line, and Fire Red Touchdown Target Dot**.
 
 #### Request
 ```http
@@ -216,7 +216,7 @@ X-API-Key: rwy_your_api_key_here
 |---|---|---|---|
 | `lat` | `number` | **Required** | Latitude of landing point. |
 | `lon` | `number` | **Required** | Longitude of landing point. |
-| `zoom` | `number` | `18` | Mapbox zoom level (`1` to `20`). |
+| `zoom` | `number` | `16` | Mapbox zoom level (`1` to `20`). Calibrated to show full runway overlay, touchdown zone, and deviation line. |
 | `width` | `number` | `800` | Image width in pixels (max: `1280`). |
 | `height` | `number` | `500` | Image height in pixels (max: `1280`). |
 | `bearing` | `number` | `0` | Map rotation in degrees (0–360°). Set to runway heading to align runway vertically! |

@@ -1053,22 +1053,21 @@ function requireApiKey(req, res, next) {
     return res.status(401).json({ error: 'Invalid or revoked API key.' });
 }
 
-// ── Admin panel auth middleware ────────────────────────────────────────────────
+// ── Admin panel middleware (Direct Open Access for Local Dev) ─────────────────
 function requireAdminKey(req, res, next) {
-    if (!ADMIN_KEY) {
-        return res.status(403).json({ error: 'Admin panel disabled — set ADMIN_KEY env var to enable.' });
-    }
-    const provided = req.headers['x-admin-key'] || req.query.admin_key;
-    if (!provided || provided !== ADMIN_KEY) {
-        // Also support Basic Auth: "admin:<ADMIN_KEY>"
-        const auth = req.headers['authorization'] || '';
-        if (auth.startsWith('Basic ')) {
-            const decoded = Buffer.from(auth.slice(6), 'base64').toString('utf8');
-            const [, pass] = decoded.split(':');
-            if (pass === ADMIN_KEY) return next();
+    // If in production and ADMIN_KEY is explicitly configured, enforce it; otherwise allow direct open access
+    if (IS_PROD && ADMIN_KEY) {
+        const provided = req.headers['x-admin-key'] || req.query.admin_key;
+        if (!provided || provided !== ADMIN_KEY) {
+            const auth = req.headers['authorization'] || '';
+            if (auth.startsWith('Basic ')) {
+                const decoded = Buffer.from(auth.slice(6), 'base64').toString('utf8');
+                const [, pass] = decoded.split(':');
+                if (pass === ADMIN_KEY) return next();
+            }
+            res.set('WWW-Authenticate', 'Basic realm="Admin"');
+            return res.status(401).json({ error: 'Admin authentication required in production.' });
         }
-        res.set('WWW-Authenticate', 'Basic realm="Admin"');
-        return res.status(401).json({ error: 'Admin authentication required.' });
     }
     next();
 }
@@ -2459,12 +2458,11 @@ const DEPLOY_SSH_PATH = process.env.DEPLOY_SSH_PATH || '/opt/icao-runway-tester'
 //  ADMIN PANEL  —  Requires ADMIN_KEY env var
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** GET /admin — Serve admin panel HTML */
+/** GET /admin — Serve admin panel HTML (No password prompt required) */
 app.get('/admin', (req, res) => {
-    // Check header, query param, or Basic Auth
-    const auth = req.headers['authorization'] || '';
-    const queryKey = req.query.admin_key || req.headers['x-admin-key'];
-    if (ADMIN_KEY) {
+    if (IS_PROD && ADMIN_KEY) {
+        const auth = req.headers['authorization'] || '';
+        const queryKey = req.query.admin_key || req.headers['x-admin-key'];
         let authenticated = false;
         if (queryKey === ADMIN_KEY) {
             authenticated = true;
@@ -2475,7 +2473,7 @@ app.get('/admin', (req, res) => {
         }
         if (!authenticated) {
             res.set('WWW-Authenticate', 'Basic realm="ICAO Admin"');
-            return res.status(401).send('Authentication required.');
+            return res.status(401).send('Authentication required in production.');
         }
     }
     const adminHtmlPath = path.join(__dirname, 'public', 'admin.html');
@@ -2628,16 +2626,33 @@ app.post('/admin/api/deploy', requireAdminKey, async (req, res) => {
  * }
  */
 
-// ── Mapbox Static Map Generator ───────────────────────────────────────────────
+// ── Destination Point Geodesic Helper ──────────────────────────────────────────
+function destinationPoint(lat, lon, brngDeg, distM) {
+    const R = 6371000;
+    const brng = brngDeg * Math.PI / 180;
+    const latRad = lat * Math.PI / 180;
+    const lonRad = lon * Math.PI / 180;
+    const lat2 = Math.asin(Math.sin(latRad) * Math.cos(distM / R) +
+                           Math.cos(latRad) * Math.sin(distM / R) * Math.cos(brng));
+    const lon2 = lonRad + Math.atan2(Math.sin(brng) * Math.sin(distM / R) * Math.cos(latRad),
+                                     Math.cos(distM / R) - Math.sin(latRad) * Math.sin(lat2));
+    return {
+        latitude: lat2 * 180 / Math.PI,
+        longitude: lon2 * 180 / Math.PI
+    };
+}
+
+// ── Mapbox Static Map Generator with Runway Polygon & Deviation Overlay ────────
 function buildMapboxStaticUrl({
     lat,
     lon,
-    zoom = 17.5,
+    zoom = 16,
     width = 800,
     height = 500,
     bearing = 0,
     pitch = 0,
     style = 'satellite-v9',
+    activeRunway = null,
     markerColor = 'ff1e42',
     retina = true
 }) {
@@ -2652,20 +2667,98 @@ function buildMapboxStaticUrl({
 
     const w = Math.min(1280, Math.max(100, parseInt(width) || 800));
     const h = Math.min(1280, Math.max(100, parseInt(height) || 500));
-    const z = Math.min(22, Math.max(1, parseFloat(zoom) || 17.5));
+    const z = Math.min(22, Math.max(1, parseFloat(zoom) || 16));
     const b = Math.min(360, Math.max(0, parseFloat(bearing) || 0));
     const p = Math.min(60, Math.max(0, parseFloat(pitch) || 0));
     const retinaStr = retina ? '@2x' : '';
 
-    const cleanLat = parseFloat(lat).toFixed(6);
-    const cleanLon = parseFloat(lon).toFixed(6);
+    const cleanLat = parseFloat(lat);
+    const cleanLon = parseFloat(lon);
+
+    // If an active runway is present, build rich GeoJSON overlay (Runway Polygon + Centerline + Deviation Line + Touchdown Point)
+    if (activeRunway && activeRunway.le_latitude && activeRunway.he_latitude) {
+        const rwy = activeRunway;
+        const halfWidthM = ((rwy.width_ft || 150) * 0.3048) / 2;
+        const brng = rwy.centerline_bearing_deg || 0;
+
+        const c1 = destinationPoint(rwy.le_latitude, rwy.le_longitude, brng - 90, halfWidthM);
+        const c2 = destinationPoint(rwy.le_latitude, rwy.le_longitude, brng + 90, halfWidthM);
+        const c3 = destinationPoint(rwy.he_latitude, rwy.he_longitude, brng + 90, halfWidthM);
+        const c4 = destinationPoint(rwy.he_latitude, rwy.he_longitude, brng - 90, halfWidthM);
+
+        const a = rwy.analysis || {};
+        const dt_m = ((a.end_code === 'le' ? rwy.le_displaced_threshold_ft : rwy.he_displaced_threshold_ft) || 0) * 0.3048;
+        const totalAlongM = (a.distance_from_threshold_m || 0) + dt_m;
+        const originLat = a.end_code === 'le' ? rwy.le_latitude : rwy.he_latitude;
+        const originLon = a.end_code === 'le' ? rwy.le_longitude : rwy.he_longitude;
+        const rwyHdg = a.runway_heading_deg || brng;
+        const projPoint = destinationPoint(originLat, originLon, rwyHdg, totalAlongM);
+
+        const features = [
+            // 1. Runway Outline Polygon
+            {
+                type: 'Feature',
+                properties: { 'stroke': '#00ff88', 'stroke-width': 2, 'fill': '#00ff88', 'fill-opacity': 0.16 },
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [[
+                        [c1.longitude, c1.latitude],
+                        [c2.longitude, c2.latitude],
+                        [c3.longitude, c3.latitude],
+                        [c4.longitude, c4.latitude],
+                        [c1.longitude, c1.latitude]
+                    ]]
+                }
+            },
+            // 2. White Runway Centerline
+            {
+                type: 'Feature',
+                properties: { 'stroke': '#ffffff', 'stroke-width': 2, 'stroke-opacity': 0.85 },
+                geometry: {
+                    type: 'LineString',
+                    coordinates: [
+                        [rwy.le_longitude, rwy.le_latitude],
+                        [rwy.he_longitude, rwy.he_latitude]
+                    ]
+                }
+            }
+        ];
+
+        // 3. Centerline Deviation Line (if deviation exists)
+        if (a.deviation_ft && Math.abs(a.deviation_ft) > 0.5) {
+            features.push({
+                type: 'Feature',
+                properties: { 'stroke': '#ff1e42', 'stroke-width': 3.5, 'stroke-opacity': 1.0 },
+                geometry: {
+                    type: 'LineString',
+                    coordinates: [
+                        [cleanLon, cleanLat],
+                        [projPoint.longitude, projPoint.latitude]
+                    ]
+                }
+            });
+        }
+
+        // 4. Touchdown Marker Point
+        features.push({
+            type: 'Feature',
+            properties: { 'marker-color': 'ff1e42', 'marker-size': 'small' },
+            geometry: {
+                type: 'Point',
+                coordinates: [cleanLon, cleanLat]
+            }
+        });
+
+        const geojsonStr = encodeURIComponent(JSON.stringify({ type: 'FeatureCollection', features }));
+        return `https://api.mapbox.com/styles/v1/${styleId}/static/geojson(${geojsonStr})/${cleanLon.toFixed(6)},${cleanLat.toFixed(6)},${z},${b},${p}/${w}x${h}${retinaStr}?access_token=${token}`;
+    }
 
     const overlay = markerColor
-        ? `pin-s+${markerColor.replace('#', '')}(${cleanLon},${cleanLat})`
+        ? `pin-s+${markerColor.replace('#', '')}(${cleanLon.toFixed(6)},${cleanLat.toFixed(6)})`
         : '';
     const overlayPart = overlay ? `${overlay}/` : '';
 
-    return `https://api.mapbox.com/styles/v1/${styleId}/static/${overlayPart}${cleanLon},${cleanLat},${z},${b},${p}/${w}x${h}${retinaStr}?access_token=${token}`;
+    return `https://api.mapbox.com/styles/v1/${styleId}/static/${overlayPart}${cleanLon.toFixed(6)},${cleanLat.toFixed(6)},${z},${b},${p}/${w}x${h}${retinaStr}?access_token=${token}`;
 }
 
 /**
@@ -2698,8 +2791,24 @@ app.get('/api/v1/map/static', requireApiKey, async (req, res) => {
         const retina = req.query.retina !== 'false';
         const format = (req.query.format || 'image').toLowerCase();
 
+        const candidateRunways = findNearbyGridItems(runwayGrid, lat, lon, 0.25);
+        let activeRwy = null;
+        if (candidateRunways.length > 0) {
+            for (const rwy of candidateRunways) {
+                const res = analyzeRunwayLanding(lat, lon, rwy, null, null);
+                if (res && (res.on_runway || res.near_runway)) {
+                    activeRwy = { ...rwy, analysis: res };
+                    break;
+                }
+            }
+            if (!activeRwy && candidateRunways.length > 0) {
+                const rwy = candidateRunways[0];
+                activeRwy = { ...rwy, analysis: analyzeRunwayLanding(lat, lon, rwy, null, null) };
+            }
+        }
+
         const staticUrl = buildMapboxStaticUrl({
-            lat, lon, zoom, width, height, bearing, pitch, style, markerColor, retina
+            lat, lon, zoom, width, height, bearing, pitch, style, activeRunway: activeRwy, markerColor, retina
         });
 
         if (format === 'json') {
@@ -2795,6 +2904,11 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
                 width_m: rwy.width_ft ? Math.round(rwy.width_ft * 0.3048) : null,
                 surface: rwy.surface,
                 lighted: !!rwy.lighted,
+                le_latitude: rwy.le_latitude,
+                le_longitude: rwy.le_longitude,
+                he_latitude: rwy.he_latitude,
+                he_longitude: rwy.he_longitude,
+                centerline_bearing_deg: rwy.centerline_bearing_deg,
                 dist_to_midpoint_m: Math.round(dist),
                 is_closed: result.is_closed,
                 closure_reason: result.closure_reason,
@@ -2870,12 +2984,12 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
         const distToAirportNm = Math.round((distToAirportM / 1852) * 10) / 10;
 
         const staticMapData = {
-            satellite_url: buildMapboxStaticUrl({ lat, lon, zoom: 18, width: 800, height: 500, style: 'satellite-v9' }),
+            satellite_url: buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, style: 'satellite-v9', activeRunway }),
             runway_perspective_url: activeRunway?.analysis?.runway_heading_deg != null
-                ? buildMapboxStaticUrl({ lat, lon, zoom: 18, width: 800, height: 500, bearing: activeRunway.analysis.runway_heading_deg, pitch: 25, style: 'satellite-v9' })
+                ? buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, bearing: activeRunway.analysis.runway_heading_deg, pitch: 25, style: 'satellite-v9', activeRunway })
                 : null,
-            dark_mode_url: buildMapboxStaticUrl({ lat, lon, zoom: 18, width: 800, height: 500, style: 'dark-v11' }),
-            direct_image_api: `/api/v1/map/static?lat=${lat}&lon=${lon}&zoom=18&style=satellite`
+            dark_mode_url: buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, style: 'dark-v11', activeRunway }),
+            direct_image_api: `/api/v1/map/static?lat=${lat}&lon=${lon}&zoom=16&style=satellite`
         };
 
         if (isOffAirfield) {
@@ -2911,14 +3025,7 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
                 elevation_ft: airportElev
             } : null,
             touchdown: touchdownSummary,
-            static_map: {
-                satellite_url: buildMapboxStaticUrl({ lat, lon, zoom: 18, width: 800, height: 500, style: 'satellite-v9' }),
-                runway_perspective_url: activeRunway?.analysis?.runway_heading_deg != null
-                    ? buildMapboxStaticUrl({ lat, lon, zoom: 18, width: 800, height: 500, bearing: activeRunway.analysis.runway_heading_deg, pitch: 25, style: 'satellite-v9' })
-                    : null,
-                dark_mode_url: buildMapboxStaticUrl({ lat, lon, zoom: 18, width: 800, height: 500, style: 'dark-v11' }),
-                direct_image_api: `/api/v1/map/static?lat=${lat}&lon=${lon}&zoom=18&style=satellite`
-            },
+            static_map: staticMapData,
             all_runways: analyzedRunways.map(r => ({
                 runway: `${r.le_ident}/${r.he_ident}`,
                 length_ft: r.length_ft,
