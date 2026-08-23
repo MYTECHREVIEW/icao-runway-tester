@@ -1,4 +1,118 @@
 
+// ── Dedicated Interactive Popups for Runway, Taxiway, and Airport ─────────────
+let featurePopup = null;
+
+function showRunwayPopup(rwy, latlng) {
+  if (!rwy) return;
+  const operational = lastResult?.operational;
+  const airport = lastResult?.airport;
+  const isClosed = rwy.is_closed || (rwy.analysis && rwy.analysis.is_closed);
+  const sourceTag = operational?.source_label || 'METAR';
+  const windStr = operational?.wind_dir !== null && operational?.wind_speed !== null
+    ? `${operational.wind_dir}&deg; @ ${operational.wind_speed} kt${operational.wind_gust ? ' G ' + operational.wind_gust + ' kt' : ''}`
+    : 'Calm / Variable';
+
+  const rwyElevFt = rwy.le_elevation_ft ?? rwy.he_elevation_ft ?? airport?.elevation_ft ?? null;
+  const rwyElevM = rwyElevFt !== null ? Math.round(rwyElevFt * 0.3048) : null;
+  const rwyDimsStr = `${fmt(rwy.length_ft)} ft × ${fmt(rwy.width_ft)} ft`;
+  const elevStr = rwyElevFt !== null ? `${fmt(rwyElevFt)} ft (${fmt(rwyElevM)} m)` : '—';
+  const headingsStr = `${rwy.le_heading_degT != null ? rwy.le_heading_degT + '°' : '—'} / ${rwy.he_heading_degT != null ? rwy.he_heading_degT + '°' : '—'}`;
+
+  const identStr = `RW ${rwy.le_ident || ''}${rwy.he_ident ? ' / ' + rwy.he_ident : ''}`;
+
+  const badgeHtml = isClosed
+    ? `<span class="rwy-active-badge closed">🚫 ${identStr} CLOSED</span>`
+    : `<span class="rwy-active-badge">🛫 ${identStr}</span>`;
+
+  const closedNoticeHtml = isClosed
+    ? `<div class="closed-rwy-notice">⚠️ RUNWAY CLOSED (NOTAM)</div>`
+    : '';
+
+  const popupHtml = `
+    <div class="pin-popup-card runway-popup">
+      <div class="pin-popup-badge-row">
+        ${badgeHtml}
+        <span class="rwy-source-badge">${sourceTag}</span>
+      </div>
+      <div class="pin-popup-name">${airport ? airport.icao + ' &bull; ' + airport.name : (rwy.airport_icao || '')}</div>
+      ${closedNoticeHtml}
+      <div class="pin-popup-op-strip">
+        <div class="op-row">
+          <span class="op-label">💨 Surface Wind:</span>
+          <span class="op-val">${windStr}</span>
+        </div>
+      </div>
+      <div class="pin-popup-rwy-details">
+        <div class="rwy-metric-row">
+          <span class="rwy-metric-label">Dimensions</span>
+          <span class="rwy-metric-val">${rwyDimsStr}</span>
+        </div>
+        <div class="rwy-metric-row">
+          <span class="rwy-metric-label">Surface</span>
+          <span class="rwy-metric-val" style="text-transform: capitalize;">${rwy.surface || 'Paved'}</span>
+        </div>
+        <div class="rwy-metric-row">
+          <span class="rwy-metric-label">True Headings</span>
+          <span class="rwy-metric-val">${headingsStr}</span>
+        </div>
+        <div class="rwy-metric-row">
+          <span class="rwy-metric-label">Elevation</span>
+          <span class="rwy-metric-val">▲ ${elevStr}</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  L.popup({ offset: [0, -6], maxWidth: 420, className: 'feature-popup-custom' })
+    .setLatLng(latlng)
+    .setContent(popupHtml)
+    .openOn(map);
+}
+
+function showTaxiwayPopup(twy, latlng) {
+  if (!twy) return;
+  const operational = lastResult?.operational;
+  const airport = lastResult?.airport;
+  const isClosed = twy.is_closed;
+  const sourceTag = operational?.source_label || 'METAR';
+  const elevStr = airport?.elevation_ft !== null ? `${fmt(airport.elevation_ft)} ft` : '—';
+  const windStr = operational?.wind_dir !== null && operational?.wind_speed !== null
+    ? `${operational.wind_dir}&deg; @ ${operational.wind_speed} kt`
+    : 'Calm / Variable';
+
+  const badgeHtml = isClosed
+    ? `<span class="rwy-active-badge closed">❌ TWY ${twy.ref || ''} CLOSED</span>`
+    : `<span class="twy-active-badge">🚖 TWY ${twy.ref || 'Taxiway'}</span>`;
+
+  const closedNoticeHtml = isClosed
+    ? `<div class="closed-rwy-notice">❌ TAXIWAY ${twy.ref || ''} CLOSED BY NOTAM: ${twy.closure_reason || 'Out of service'}</div>`
+    : '';
+
+  const popupHtml = `
+    <div class="pin-popup-card taxiway-popup">
+      <div class="pin-popup-badge-row">
+        ${badgeHtml}
+        <span class="rwy-source-badge">${sourceTag}</span>
+        <span class="airport-elev-badge-popup">▲ ${elevStr}</span>
+      </div>
+      <div class="pin-popup-name">${airport ? airport.name : (airport?.icao || '')}</div>
+      <div class="pin-popup-location">📍 ${twy.name || ('Taxiway ' + (twy.ref || ''))} &bull; Width: ${twy.width_ft || 75} ft (${twy.surface || 'Asphalt'})</div>
+      ${closedNoticeHtml}
+      <div class="pin-popup-op-strip">
+        <div class="op-row">
+          <span class="op-label">💨 Surface Wind:</span>
+          <span class="op-val">${windStr}</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  L.popup({ offset: [0, -6], maxWidth: 400, className: 'feature-popup-custom' })
+    .setLatLng(latlng)
+    .setContent(popupHtml)
+    .openOn(map);
+}
+
 // ── Programmatic Touchdown GPS Coordinate Injection ───────────────────────────
 function pushTouchdownCoordinates(lat, lon, opts = {}) {
     lat = parseFloat(lat);
@@ -519,6 +633,7 @@ function drawTaxiways(taxiways) {
           selectTaxiwayForEditing(twy.ref);
         } else {
           selectTaxiway(twy.ref);
+          showTaxiwayPopup(twy, e.latlng);
         }
       });
     }
@@ -604,7 +719,7 @@ function drawRunways(data) {
       fillOpacity: 1
     }).addTo(map);
 
-    // Clicking runway polyline isolates that runway!
+    // Clicking runway polygon isolates that runway and shows popup!
     poly.on('click', (e) => {
       L.DomEvent.stopPropagation(e);
       const key = getRunwayKey(rwy);
@@ -612,6 +727,7 @@ function drawRunways(data) {
       clearRunwayLayers();
       drawRunways(lastResult);
       updateResults(lastResult);
+      showRunwayPopup(rwy, e.latlng);
     });
 
     runwayLayers.push(poly);
@@ -652,6 +768,7 @@ function drawRunways(data) {
         clearRunwayLayers();
         drawRunways(lastResult);
         updateResults(lastResult);
+        showRunwayPopup(rwy, e.latlng);
       });
       runwayLayers.push(leLabel);
     }
@@ -663,6 +780,7 @@ function drawRunways(data) {
         clearRunwayLayers();
         drawRunways(lastResult);
         updateResults(lastResult);
+        showRunwayPopup(rwy, e.latlng);
       });
       runwayLayers.push(heLabel);
     }
@@ -1153,8 +1271,8 @@ function updateResults(data) {
   renderFeedsPanel(operational);
   renderNotamsPanel(operational, airport?.icao);
 
-  // 7. On-Pin Popup Notification Card
-  if (pinMarker) {
+  // 7. On-Pin Popup Notification Card (Only if explicit touchdown pin exists)
+  if (pinMarker && map.hasLayer(pinMarker)) {
     pinMarker.closePopup();
     pinMarker.unbindPopup();
 
@@ -1560,7 +1678,7 @@ async function drawAirportTerminals(data) {
     targetLayer.addLayer(tBar);
     terminalLayerGroup.addLayer(tBar);
 
-    // Custom Traced Lead-In Line
+    // Custom Traced Lead-In Line (Part of the Taxiway System Overlay)
     let customLine = null;
     if (bay.lead_in_coords && Array.isArray(bay.lead_in_coords) && bay.lead_in_coords.length >= 2) {
       customLine = L.polyline(bay.lead_in_coords, {
@@ -1569,7 +1687,10 @@ async function drawAirportTerminals(data) {
         opacity: 0.95,
         interactive: false
       });
-      targetLayer.addLayer(customLine);
+      // ONLY render Gate/Stand trace line if Taxiway overlay is active or in edit mode
+      if (showTaxiways || isEditMode) {
+        taxiwayLayerGroup.addLayer(customLine);
+      }
 
       // Smooth, robust draggable waypoint handles
       if (isEditMode && isSelected && !isTracingLeadIn && !isSnappingToTaxiway) {
@@ -4214,25 +4335,18 @@ map.on('click', (e) => {
     return;
   }
 
-  const { lat, lng } = e.latlng;
-
-  if (pinMarker) {
-    pinMarker.closePopup();
-    pinMarker.unbindPopup();
-    pinMarker.setLatLng([lat, lng]);
-  } else {
-    pinMarker = L.marker([lat, lng], {
-      icon: pinIcon(false, false, false),
-      draggable: true
-    }).addTo(map);
-
-    pinMarker.on('dragend', (ev) => {
-      const pos = ev.target.getLatLng();
-      analyzePoint(pos.lat, pos.lng);
-    });
+  // Clicking empty map area closes popups and resets isolation
+  map.closePopup();
+  if (selectedRunwayKey || selectedTaxiwayRef) {
+    selectedRunwayKey = null;
+    selectedTaxiwayRef = null;
+    clearRunwayLayers();
+    if (lastResult) {
+      drawRunways(lastResult);
+      if (lastResult.taxiways && showTaxiways) drawTaxiways(lastResult.taxiways);
+      updateResults(lastResult);
+    }
   }
-
-  analyzePoint(lat, lng);
 });
 
 // ── Airport Search ────────────────────────────────────────────────────────────
@@ -4263,15 +4377,7 @@ async function goToAirport(query) {
       selectedRunwayKey = null;
       selectedTaxiwayRef = null;
 
-      if (!pinMarker) {
-        pinMarker = L.marker([pLat, pLon], { icon: pinIcon(false, false, false), draggable: true }).addTo(map);
-        pinMarker.on('dragend', (e) => {
-          const pos = e.target.getLatLng();
-          analyzePoint(pos.lat, pos.lng);
-        });
-      } else {
-        pinMarker.setLatLng([pLat, pLon]);
-      }
+      // (Pin removed on search navigation)
 
       map.flyTo([pLat, pLon], 15, { duration: 1.5 });
       saveLastAirport(apt);
@@ -4294,15 +4400,7 @@ async function goToAirport(query) {
       selectedRunwayKey = null;
       selectedTaxiwayRef = null;
 
-      if (!pinMarker) {
-        pinMarker = L.marker([pLat, pLon], { icon: pinIcon(false, false, false), draggable: true }).addTo(map);
-        pinMarker.on('dragend', (e) => {
-          const pos = e.target.getLatLng();
-          analyzePoint(pos.lat, pos.lng);
-        });
-      } else {
-        pinMarker.setLatLng([pLat, pLon]);
-      }
+      // (Pin removed on search navigation)
 
       map.flyTo([pLat, pLon], 15, { duration: 1.5 });
       analyzePoint(pLat, pLon);
@@ -4379,15 +4477,7 @@ showLoading(false);
   (function restoreLastAirport() {
   const last = loadLastAirport();
   if (last && last.icao && last.lat && last.lon) {
-    if (!pinMarker) {
-      pinMarker = L.marker([last.lat, last.lon], { icon: pinIcon(false, false, false), draggable: true }).addTo(map);
-      pinMarker.on('dragend', function(e) {
-        const pos = e.target.getLatLng();
-        analyzePoint(pos.lat, pos.lng);
-      });
-    } else {
-      pinMarker.setLatLng([last.lat, last.lon]);
-    }
+    // (Pin removed on startup)
     map.setView([last.lat, last.lon], 15);
     analyzePoint(last.lat, last.lon, last.icao);
     setTimeout(function() {
