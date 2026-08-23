@@ -181052,5 +181052,13 @@
       }
     ],
     "hold_points": []
+  },
+  "KBDR": {
+    "icao": "KBDR",
+    "terminals": [],
+    "gates": [],
+    "stands": [],
+    "bays": [],
+    "hold_points": []
   }
 }
