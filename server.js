@@ -877,8 +877,7 @@ function analyzeRunwayLanding(lat, lon, rwy, operationalCtx, airportElev) {
 
         const xtd_m  = crossTrack(lat1, lon1, lat2, lon2, lat, lon);
         const atd_m  = alongTrack(lat1, lon1, lat2, lon2, lat, lon);
-        const sign   = end === 'le' ? 1 : -1;
-        const dev_m  = xtd_m * sign;
+        const dev_m  = xtd_m;
 
         const dt_m = (end === 'le'
             ? (rwy.le_displaced_threshold_ft || 0)
@@ -1175,13 +1174,64 @@ app.get('/api/config', (req, res) => {
     });
 });
 
+// ── Universal Field & Metric Query Filter ─────────────────────────────────────
+function filterResponseFields(payload, req) {
+    if (!payload || typeof payload !== 'object') return payload;
+
+    const queryFields = req.query?.fields || req.body?.fields;
+    const queryMetrics = req.query?.metrics || req.body?.metrics;
+
+    let result = { ...payload };
+
+    // 1. Root fields filtering (e.g. fields=touchdown,map_styling,static_map)
+    if (queryFields) {
+        const allowed = (Array.isArray(queryFields) ? queryFields : String(queryFields).split(','))
+            .map(f => f.trim().toLowerCase());
+        if (allowed.length > 0) {
+            const filtered = {};
+            if (result.status) filtered.status = result.status;
+            if (result.touchdown_coordinates) filtered.touchdown_coordinates = result.touchdown_coordinates;
+
+            for (const key of Object.keys(result)) {
+                if (allowed.includes(key.toLowerCase())) {
+                    filtered[key] = result[key];
+                }
+            }
+            result = filtered;
+        }
+    }
+
+    // 2. Metrics filtering inside touchdown and banner_data (e.g. metrics=dev,fpm,g)
+    if (queryMetrics && result.touchdown) {
+        const allowedMetrics = (Array.isArray(queryMetrics) ? queryMetrics : String(queryMetrics).split(','))
+            .map(m => m.trim().toLowerCase());
+
+        if (allowedMetrics.length > 0) {
+            const td = { ...result.touchdown };
+            if (!allowedMetrics.some(m => ['dev', 'deviation', 'centerline'].includes(m))) delete td.centerline_deviation;
+            if (!allowedMetrics.some(m => ['threshold', 'distance', 'tdz', 'remaining'].includes(m))) delete td.threshold_distance;
+            if (!allowedMetrics.some(m => ['wind', 'winds', 'headwind', 'crosswind'].includes(m))) delete td.wind;
+            if (!allowedMetrics.some(m => ['telemetry', 'flight_telemetry', 'fpm', 'vs', 'g', 'ias', 'speed', 'heading', 'hdg'].includes(m))) delete td.flight_telemetry;
+            result.touchdown = td;
+        }
+    }
+
+    return result;
+}
 
 /**
  * POST /api/analyze
  * Body: { lat, lon, preferredSource: 'real_world' | 'vatsim' | 'ivao' | 'metar' }
  */
 app.post('/api/analyze', async (req, res) => {
-    let { lat, lon, icao: explicitIcao, preferredSource } = req.body;
+    let {
+        lat, lon, icao: explicitIcao, preferredSource,
+        fpm, vs, vertical_speed_fpm,
+        ias, ias_kt, speed,
+        g, g_force,
+        hdg, heading,
+        banner_options, banner_fields
+    } = req.body;
 
     if (explicitIcao && (!lat || !lon)) {
         const aptMatch = airportsDb[explicitIcao.toUpperCase().trim()];
@@ -1379,7 +1429,32 @@ app.post('/api/analyze', async (req, res) => {
     const isOffAirfield = !onRunway && !onTaxiway && !isNearRunwayScope && (distToAirportM > 3500);
     const distToAirportNm = Math.round((distToAirportM / 1852) * 10) / 10;
 
-    res.json({
+    // Construct telemetry and banner HTML
+    const activeAnalysis = activeRunway?.analysis || null;
+    const finalFpm = fpm ?? vs ?? vertical_speed_fpm ?? null;
+    const finalG = g ?? g_force ?? null;
+    const finalIas = ias ?? ias_kt ?? speed ?? null;
+    const finalHdg = hdg ?? heading ?? activeAnalysis?.runway_heading_deg ?? null;
+
+    const bannerMetrics = {
+        deviation_ft: activeAnalysis?.deviation_ft ?? null,
+        side: activeAnalysis?.side ?? 'center',
+        vertical_speed_fpm: typeof finalFpm === 'number' ? finalFpm : (finalFpm !== null && !isNaN(parseFloat(finalFpm)) ? parseFloat(finalFpm) : null),
+        g_force: typeof finalG === 'number' ? finalG : (finalG !== null && !isNaN(parseFloat(finalG)) ? parseFloat(finalG) : null),
+        ias_kt: typeof finalIas === 'number' ? finalIas : (finalIas !== null && !isNaN(parseFloat(finalIas)) ? parseFloat(finalIas) : null),
+        heading_deg: typeof finalHdg === 'number' ? finalHdg : (finalHdg !== null && !isNaN(parseFloat(finalHdg)) ? parseFloat(finalHdg) : null),
+        wind_dir: operationalCtx?.wind_dir ?? null,
+        wind_speed: operationalCtx?.wind_speed ?? null,
+        headwind_kt: activeAnalysis?.headwind_kt ?? null,
+        crosswind_kt: activeAnalysis?.crosswind_kt ?? null
+    };
+
+    const bannerOpts = banner_options || (banner_fields ? { fields: banner_fields } : {});
+    const bannerHtml = buildDeviationBannerHtml(bannerMetrics, bannerOpts);
+    const isClosedActive = !!(activeRunway && (activeRunway.is_closed || activeRunway.analysis?.is_closed));
+    const unifiedStyles = getUnifiedMapStyling({ onRunway: !!onRunway, isClosed: isClosedActive, onTaxiway: !!onTaxiway, isOffAirfield });
+
+    const analyzeResponse = {
         lat, lon,
         is_off_airfield: isOffAirfield,
         distance_to_airport_m: Math.round(distToAirportM),
@@ -1409,8 +1484,19 @@ app.post('/api/analyze', async (req, res) => {
         stands: terminalData.stands || [],
         bays: terminalData.bays || mergeGatesAndStands(terminalData.gates || [], terminalData.stands || []),
         hold_points: terminalData.hold_points || seedTerminals[selectedAirportIcao]?.hold_points || [],
-        runways: analyzedRunways
-    });
+        runways: analyzedRunways,
+        flight_telemetry: {
+            vertical_speed_fpm: bannerMetrics.vertical_speed_fpm,
+            g_force: bannerMetrics.g_force,
+            ias_kt: bannerMetrics.ias_kt,
+            aircraft_heading_deg: bannerMetrics.heading_deg
+        },
+        banner_html: bannerHtml,
+        banner_data: bannerMetrics,
+        map_styling: unifiedStyles
+    };
+
+    res.json(filterResponseFields(analyzeResponse, req));
 });
 
 
@@ -2648,21 +2734,192 @@ app.post('/admin/api/deploy', requireAdminKey, async (req, res) => {
  */
 
 
-// ── Build Runway GeoJSON Overlay (Runway Polygon, Centerline, Deviation Vector & Dot) ──
-function buildRunwayGeoJsonOverlay(lat, lon, activeRunway) {
+// ── Circle Polygon Generator for Precision Target Dot ──────────────────────────
+function createCirclePolygon(lat, lon, radiusM, numPoints = 12) {
+    const coords = [];
+    for (let i = 0; i < numPoints; i++) {
+        const angle = (i * 360) / numPoints;
+        const pt = destinationPoint(lat, lon, angle, radiusM);
+        coords.push([parseFloat(pt.longitude.toFixed(6)), parseFloat(pt.latitude.toFixed(6))]);
+    }
+    if (coords.length > 0) {
+        coords.push([coords[0][0], coords[0][1]]); // Explicit exact closure
+    }
+    return coords;
+}
+
+// ── Unified Map Styling Design Tokens for Cross-Platform Continuation ─────────
+function getUnifiedMapStyling(context = {}) {
+    const {
+        onRunway = false,
+        isClosed = false,
+        onTaxiway = false,
+        isOffAirfield = false
+    } = context;
+
+    let dotFill = '#ff1e42'; // Default: Fire Red (on-runway)
+    let dotType = 'on_runway';
+    let dotLabel = 'Touchdown Target (Fire Red)';
+    let haloOpacity = 0.35;
+
+    if (isClosed) {
+        dotFill = '#dc2626'; // Deep Crimson (closed runway)
+        dotType = 'closed_runway';
+        dotLabel = 'Closed Runway Touchdown (Crimson)';
+    } else if (onTaxiway) {
+        dotFill = '#ffb800'; // Amber Gold (taxiway)
+        dotType = 'taxiway';
+        dotLabel = 'Taxiway Position (Amber Gold)';
+    } else if (isOffAirfield) {
+        dotFill = '#f97316'; // Fire Orange (off-airfield)
+        dotType = 'off_airfield';
+        dotLabel = 'Off-Airfield Position (Fire Orange)';
+    }
+
+    const runwayFill = isClosed ? '#ff4757' : (onRunway ? '#00ff88' : '#00d4ff');
+    const runwayFillOpacity = isClosed ? 0.35 : (onRunway ? 0.18 : 0.14);
+    const runwayStroke = isClosed ? '#ff4757' : (onRunway ? '#00ff88' : '#00d4ff');
+    const runwayStrokeWidth = isClosed ? 3.5 : (onRunway ? 2.5 : 1.5);
+
+    return {
+        runway_overlay: {
+            status: isClosed ? 'closed' : (onRunway ? 'active_lit_landing' : 'near_runway'),
+            stroke: runwayStroke,
+            stroke_width: runwayStrokeWidth,
+            fill: runwayFill,
+            fill_opacity: runwayFillOpacity,
+            description: isClosed ? 'Closed Runway Warning Overlay' : (onRunway ? 'Active Lit Landing Runway (Emerald Green)' : 'Nearby Runway Outline')
+        },
+        centerline: {
+            stroke: '#ffffff',
+            stroke_width: 2.0,
+            stroke_opacity: 0.95,
+            dash_array: isClosed ? '6,6' : '8,6',
+            description: 'Geodetic Runway Centerline'
+        },
+        centerline_deviation_vector: {
+            stroke: '#ff1e42',
+            stroke_width: 3.5,
+            stroke_opacity: 1.0,
+            dash_array: '5,5',
+            description: 'Perpendicular Cross-Track Centerline Deviation Line (Fire Red)'
+        },
+        centerline_intersection_dot: {
+            stroke: '#ffffff',
+            stroke_width: 1.5,
+            fill: '#00ff88',
+            fill_opacity: 1.0,
+            radius_m: 3.5,
+            description: 'Perpendicular Centerline Intersection Point (Emerald Ring)'
+        },
+        touchdown_dot: {
+            type: dotType,
+            label: dotLabel,
+            fill: dotFill,
+            stroke: '#ffffff',
+            stroke_width: 2.0,
+            halo_fill: dotFill,
+            halo_opacity: haloOpacity,
+            halo_radius_m: 10.5,
+            core_fill: '#ffffff',
+            core_radius_m: 2.0,
+            description: 'Target Landing GPS Coordinate Reticle'
+        },
+        hud_banner: {
+            background: 'rgba(15, 23, 42, 0.96)',
+            border: '1.5px solid rgba(255, 30, 66, 0.70)',
+            border_radius: '8px',
+            box_shadow: '0 8px 24px rgba(0, 0, 0, 0.85)',
+            backdrop_filter: 'blur(10px)',
+            font_family: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+            font_size: '13px'
+        }
+    };
+}
+
+// ── Build Runway GeoJSON Overlay with Exact Web-App Target Dot Styling ────────
+function buildRunwayGeoJsonOverlay(lat, lon, activeRunway, options = {}) {
     const cleanLat = parseFloat(lat);
     const cleanLon = parseFloat(lon);
+
+    const isClosed = options.isClosed || (activeRunway && (activeRunway.is_closed || activeRunway.analysis?.is_closed));
+    const onTaxiway = options.onTaxiway;
+    const isOffAirfield = options.isOffAirfield;
+    const onRunway = !isOffAirfield && !onTaxiway && (options.onRunway ?? (activeRunway?.analysis?.on_runway || true));
+
+    const styles = getUnifiedMapStyling({ onRunway, isClosed, onTaxiway, isOffAirfield });
+    const dotColor = styles.touchdown_dot.fill;
+    const dotName = styles.touchdown_dot.label;
+
+    // 1. Outer Glowing Halo (Radius: 10.5m, 35% opacity)
+    const haloCoords = createCirclePolygon(cleanLat, cleanLon, 10.5, 12);
+    // 2. Main Target Dot (Radius: 6.5m with white border)
+    const outerDotCoords = createCirclePolygon(cleanLat, cleanLon, 6.5, 12);
+    // 3. Center White Pinpoint Core (Radius: 2.0m)
+    const innerDotCoords = createCirclePolygon(cleanLat, cleanLon, 2.0, 8);
+
+    const touchdownDotFeatures = [
+        // Glowing Halo matching web app CSS box-shadow
+        {
+            type: 'Feature',
+            properties: {
+                name: `${dotName} - Halo`,
+                title: `${dotName} Halo`,
+                stroke: dotColor,
+                'stroke-width': 0.5,
+                'stroke-opacity': 0.4,
+                fill: dotColor,
+                'fill-opacity': styles.touchdown_dot.halo_opacity,
+                'element-type': 'touchdown-halo'
+            },
+            geometry: {
+                type: 'Polygon',
+                coordinates: [haloCoords]
+            }
+        },
+        // Main Target Dot
+        {
+            type: 'Feature',
+            properties: {
+                name: dotName,
+                title: dotName,
+                stroke: styles.touchdown_dot.stroke,
+                'stroke-width': styles.touchdown_dot.stroke_width,
+                fill: dotColor,
+                'fill-opacity': 1.0,
+                'marker-color': dotColor.replace('#', ''),
+                'marker-size': 'small',
+                'element-type': 'touchdown-target-dot'
+            },
+            geometry: {
+                type: 'Polygon',
+                coordinates: [outerDotCoords]
+            }
+        },
+        // Center Pinpoint Core
+        {
+            type: 'Feature',
+            properties: {
+                name: 'Touchdown Pinpoint Core',
+                title: 'Touchdown Pinpoint Core',
+                stroke: '#0f172a',
+                'stroke-width': 0.8,
+                fill: styles.touchdown_dot.core_fill,
+                'fill-opacity': 1.0,
+                'element-type': 'touchdown-core'
+            },
+            geometry: {
+                type: 'Polygon',
+                coordinates: [innerDotCoords]
+            }
+        }
+    ];
 
     if (!activeRunway || !activeRunway.le_latitude || !activeRunway.he_latitude) {
         return {
             type: 'FeatureCollection',
-            features: [
-                {
-                    type: 'Feature',
-                    properties: { name: 'Touchdown Point', 'marker-color': 'ff1e42', 'marker-size': 'small' },
-                    geometry: { type: 'Point', coordinates: [cleanLon, cleanLat] }
-                }
-            ]
+            styling: styles,
+            features: touchdownDotFeatures
         };
     }
 
@@ -2683,25 +2940,30 @@ function buildRunwayGeoJsonOverlay(lat, lon, activeRunway) {
     const rwyHdg = a.runway_heading_deg || brng;
     const projPoint = destinationPoint(originLat, originLon, rwyHdg, totalAlongM);
 
+    const rwyStyle = styles.runway_overlay;
+
     const features = [
-        // 1. Runway Outline Polygon
+        // 1. Runway Outline Polygon (Lit Up Emerald Green or Closed Warning Crimson)
         {
             type: 'Feature',
             properties: {
-                name: `Runway ${rwy.le_ident || ''}/${rwy.he_ident || ''}`,
-                stroke: '#00ff88',
-                'stroke-width': 2,
-                fill: '#00ff88',
-                'fill-opacity': 0.16
+                name: `Runway ${rwy.le_ident || ''}/${rwy.he_ident || ''} (${rwyStyle.status === 'active_lit_landing' ? 'Active Lit Landing' : rwyStyle.status})`,
+                title: `Runway ${rwy.le_ident || ''}/${rwy.he_ident || ''}`,
+                stroke: rwyStyle.stroke,
+                'stroke-width': rwyStyle.stroke_width,
+                fill: rwyStyle.fill,
+                'fill-opacity': rwyStyle.fill_opacity,
+                'status': rwyStyle.status,
+                'element-type': 'runway-overlay'
             },
             geometry: {
                 type: 'Polygon',
                 coordinates: [[
-                    [c1.longitude, c1.latitude],
-                    [c2.longitude, c2.latitude],
-                    [c3.longitude, c3.latitude],
-                    [c4.longitude, c4.latitude],
-                    [c1.longitude, c1.latitude]
+                    [parseFloat(c1.longitude.toFixed(6)), parseFloat(c1.latitude.toFixed(6))],
+                    [parseFloat(c2.longitude.toFixed(6)), parseFloat(c2.latitude.toFixed(6))],
+                    [parseFloat(c3.longitude.toFixed(6)), parseFloat(c3.latitude.toFixed(6))],
+                    [parseFloat(c4.longitude.toFixed(6)), parseFloat(c4.latitude.toFixed(6))],
+                    [parseFloat(c1.longitude.toFixed(6)), parseFloat(c1.latitude.toFixed(6))]
                 ]]
             }
         },
@@ -2710,58 +2972,209 @@ function buildRunwayGeoJsonOverlay(lat, lon, activeRunway) {
             type: 'Feature',
             properties: {
                 name: 'Centerline',
-                stroke: '#ffffff',
-                'stroke-width': 2,
-                'stroke-opacity': 0.85
+                title: 'Centerline',
+                stroke: styles.centerline.stroke,
+                'stroke-width': styles.centerline.stroke_width,
+                'stroke-opacity': styles.centerline.stroke_opacity,
+                'element-type': 'runway-centerline'
             },
             geometry: {
                 type: 'LineString',
                 coordinates: [
-                    [rwy.le_longitude, rwy.le_latitude],
-                    [rwy.he_longitude, rwy.he_latitude]
+                    [parseFloat(rwy.le_longitude.toFixed(6)), parseFloat(rwy.le_latitude.toFixed(6))],
+                    [parseFloat(rwy.he_longitude.toFixed(6)), parseFloat(rwy.he_latitude.toFixed(6))]
                 ]
             }
         }
     ];
 
-    // 3. Centerline Deviation Vector (if deviation exists)
+    // 3. Centerline Deviation Vector & Centerline Intersection Dot
     if (a.deviation_ft && Math.abs(a.deviation_ft) > 0.5) {
         features.push({
             type: 'Feature',
             properties: {
                 name: 'Centerline Deviation Vector',
+                title: 'Centerline Deviation Vector',
                 deviation_ft: a.deviation_ft,
                 deviation_m: a.deviation_m,
                 side: a.side,
-                stroke: '#ff1e42',
-                'stroke-width': 3.5,
-                'stroke-opacity': 1.0
+                stroke: styles.centerline_deviation_vector.stroke,
+                'stroke-width': styles.centerline_deviation_vector.stroke_width,
+                'stroke-opacity': styles.centerline_deviation_vector.stroke_opacity,
+                'element-type': 'deviation-vector'
             },
             geometry: {
                 type: 'LineString',
                 coordinates: [
                     [cleanLon, cleanLat],
-                    [projPoint.longitude, projPoint.latitude]
+                    [parseFloat(projPoint.longitude.toFixed(6)), parseFloat(projPoint.latitude.toFixed(6))]
                 ]
+            }
+        });
+
+        // Centerline intersection dot
+        const centerDotCoords = createCirclePolygon(projPoint.latitude, projPoint.longitude, 3.5, 10);
+        features.push({
+            type: 'Feature',
+            properties: {
+                name: 'Centerline Intersection',
+                title: 'Centerline Intersection Dot',
+                stroke: styles.centerline_intersection_dot.stroke,
+                'stroke-width': styles.centerline_intersection_dot.stroke_width,
+                fill: styles.centerline_intersection_dot.fill,
+                'fill-opacity': styles.centerline_intersection_dot.fill_opacity,
+                'element-type': 'centerline-dot'
+            },
+            geometry: {
+                type: 'Polygon',
+                coordinates: [centerDotCoords]
             }
         });
     }
 
-    // 4. Touchdown Marker Point
-    features.push({
-        type: 'Feature',
-        properties: {
-            name: 'Touchdown Point',
-            'marker-color': 'ff1e42',
-            'marker-size': 'small'
-        },
-        geometry: {
-            type: 'Point',
-            coordinates: [cleanLon, cleanLat]
-        }
-    });
+    // 4. Append Touchdown Dot Features (No Pin Drop)
+    features.push(...touchdownDotFeatures);
 
-    return { type: 'FeatureCollection', features };
+    return { type: 'FeatureCollection', styling: styles, features };
+}
+
+// ── Reusable Touchdown Deviation & Telemetry Banner Builder ───────────────────
+function buildDeviationBannerHtml(metrics = {}, options = {}) {
+    const {
+        deviation_ft = null,
+        side = 'center',
+        vertical_speed_fpm = null,
+        g_force = null,
+        ias_kt = null,
+        heading_deg = null,
+        wind_dir = null,
+        wind_speed = null,
+        headwind_kt = null,
+        crosswind_kt = null
+    } = metrics;
+
+    const requestedFields = options.fields ? (Array.isArray(options.fields) ? options.fields : String(options.fields).split(',').map(s => s.trim().toLowerCase())) : null;
+    const omittedFields = options.omit ? (Array.isArray(options.omit) ? options.omit : String(options.omit).split(',').map(s => s.trim().toLowerCase())) : [];
+
+    const isEnabled = (...fieldNames) => {
+        for (const f of fieldNames) {
+            const low = f.toLowerCase();
+            if (options[`show_${low}`] === false || options[low] === false) return false;
+            if (omittedFields.includes(low)) return false;
+        }
+        if (requestedFields && requestedFields.length > 0) {
+            return fieldNames.some(f => requestedFields.includes(f.toLowerCase()));
+        }
+        return true;
+    };
+
+    const rows = [];
+
+    // 1. Centerline Deviation
+    if (isEnabled('dev', 'deviation') && deviation_ft !== null && !isNaN(deviation_ft)) {
+        const absDev = Math.abs(deviation_ft).toFixed(1);
+        const sideTxt = (side || 'center').toUpperCase();
+        rows.push(`
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="display:flex; align-items:center; gap:6px; color:#cbd5e1; font-weight:600; font-size:11.5px;">
+                    <span style="font-size:13px;">📐</span>
+                    <span style="letter-spacing:0.5px;">DEVIATION:</span>
+                </div>
+                <span style="color:#ff1e42; font-weight:800; font-size:13px;">${absDev} ft ${sideTxt}</span>
+            </div>
+        `.trim());
+    }
+
+    // 2. Vertical Speed (FPM)
+    if (isEnabled('fpm', 'vertical_speed', 'vs') && vertical_speed_fpm !== null && !isNaN(vertical_speed_fpm)) {
+        const vs = Math.abs(vertical_speed_fpm);
+        const fpmColor = vs < 120 ? '#00ff88' : (vs < 220 ? '#38bdf8' : (vs < 350 ? '#f59e0b' : '#ef4444'));
+        const vsSign = vertical_speed_fpm < 0 ? '-' : (vertical_speed_fpm > 0 ? '+' : '');
+        rows.push(`
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="display:flex; align-items:center; gap:6px; color:#cbd5e1; font-weight:600; font-size:11.5px;">
+                    <span style="font-size:13px;">⚡</span>
+                    <span style="letter-spacing:0.5px;">VERT SPEED:</span>
+                </div>
+                <span style="color:${fpmColor}; font-weight:800; font-size:13px;">${vsSign}${vs.toFixed(0)} FPM</span>
+            </div>
+        `.trim());
+    }
+
+    // 3. G-Force
+    if (isEnabled('g', 'g_force') && g_force !== null && !isNaN(g_force)) {
+        const gVal = parseFloat(g_force);
+        const gColor = gVal < 1.3 ? '#00ff88' : (gVal < 1.7 ? '#f59e0b' : '#ef4444');
+        rows.push(`
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="display:flex; align-items:center; gap:6px; color:#cbd5e1; font-weight:600; font-size:11.5px;">
+                    <span style="font-size:13px;">🎯</span>
+                    <span style="letter-spacing:0.5px;">G-FORCE:</span>
+                </div>
+                <span style="color:${gColor}; font-weight:800; font-size:13px;">${gVal.toFixed(2)} G</span>
+            </div>
+        `.trim());
+    }
+
+    // 4. Speed & Direction of Landing (with rotated arrow in front)
+    if (isEnabled('speed', 'heading', 'ias', 'hdg', 'landing_vector') && (ias_kt !== null || heading_deg !== null)) {
+        const hdg = heading_deg !== null ? Math.round(heading_deg) : 0;
+        const arrowSvg = heading_deg !== null ? `
+            <svg viewBox="0 0 24 24" width="14" height="14" style="transform: rotate(${hdg}deg); transform-origin: center; display: inline-block; vertical-align: middle; fill: #38bdf8;">
+                <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+            </svg>
+        `.trim() : '';
+        const speedTxt = ias_kt !== null ? `${Math.round(ias_kt)} kt` : '';
+        const hdgTxt = heading_deg !== null ? `${hdg}°` : '';
+        rows.push(`
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="display:flex; align-items:center; gap:6px; color:#cbd5e1; font-weight:600; font-size:11.5px;">
+                    <span style="font-size:13px;">🛬</span>
+                    <span style="letter-spacing:0.5px;">LANDING:</span>
+                </div>
+                <div style="display:inline-flex; align-items:center; gap:5px; color:#38bdf8; font-weight:800; font-size:13px;">
+                    ${arrowSvg}
+                    <span>${speedTxt} · ${hdgTxt}</span>
+                </div>
+            </div>
+        `.trim());
+    }
+
+    // 5. Wind Speed & Direction (with rotated arrow in front)
+    if (isEnabled('wind', 'wind_vector') && (wind_dir !== null || wind_speed !== null)) {
+        const wDir = wind_dir !== null ? Math.round(wind_dir) : 0;
+        const wSpd = wind_speed !== null ? Math.round(wind_speed) : 0;
+        const windArrowSvg = wind_dir !== null ? `
+            <svg viewBox="0 0 24 24" width="14" height="14" style="transform: rotate(${wDir}deg); transform-origin: center; display: inline-block; vertical-align: middle; fill: #c084fc;">
+                <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+            </svg>
+        `.trim() : '';
+        rows.push(`
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="display:flex; align-items:center; gap:6px; color:#cbd5e1; font-weight:600; font-size:11.5px;">
+                    <span style="font-size:13px;">💨</span>
+                    <span style="letter-spacing:0.5px;">WIND:</span>
+                </div>
+                <div style="display:inline-flex; align-items:center; gap:5px; color:#c084fc; font-weight:800; font-size:13px;">
+                    ${windArrowSvg}
+                    <span>${wDir}° @ ${wSpd} kt</span>
+                </div>
+            </div>
+        `.trim());
+    }
+
+    if (rows.length === 0) return '';
+
+    const pos = options.position || (side === 'left' ? 'bottom-left' : 'bottom-right');
+    const transformStyle = pos === 'bottom-left'
+        ? 'transform: translate(calc(-100% - 24px), 24px);'
+        : 'transform: translate(24px, 24px);';
+
+    return `
+        <div class="touchdown-deviation-banner" style="background: rgba(15,23,42,0.96); border: 1.5px solid rgba(255,30,66,0.7); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.85); backdrop-filter: blur(10px); display: flex; flex-direction: column; padding: 7px 12px; gap: 5px; min-width: 175px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: nowrap; pointer-events: none; ${transformStyle} z-index: 1000;">
+            ${rows.join('<div style="width:100%; height:1px; background:rgba(255,255,255,0.08); margin:1px 0;"></div>')}
+        </div>
+    `.trim();
 }
 
 // ── Mapbox Static Map Generator ───────────────────────────────────────────────
@@ -2775,6 +3188,9 @@ function buildMapboxStaticUrl({
     pitch = 0,
     style = 'satellite-v9',
     activeRunway = null,
+    isOffAirfield = false,
+    onTaxiway = false,
+    isClosed = false,
     markerColor = 'ff1e42',
     retina = true
 }) {
@@ -2797,7 +3213,7 @@ function buildMapboxStaticUrl({
     const cleanLat = parseFloat(lat);
     const cleanLon = parseFloat(lon);
 
-    const geojsonObj = buildRunwayGeoJsonOverlay(cleanLat, cleanLon, activeRunway);
+    const geojsonObj = buildRunwayGeoJsonOverlay(cleanLat, cleanLon, activeRunway, { isOffAirfield, onTaxiway, isClosed });
     const geojsonStr = encodeURIComponent(JSON.stringify(geojsonObj));
     return `https://api.mapbox.com/styles/v1/${styleId}/static/geojson(${geojsonStr})/${cleanLon.toFixed(6)},${cleanLat.toFixed(6)},${z},${b},${p}/${w}x${h}${retinaStr}?access_token=${token}`;
 }
@@ -2880,7 +3296,19 @@ app.get('/api/v1/map/static', requireApiKey, async (req, res) => {
 
 app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
     try {
-        let { lat, lon, heading, vertical_speed_fpm, ias_kt, g_force, bank_deg, pitch_deg, icao } = req.body;
+        let {
+            lat, lon, heading, hdg,
+            vertical_speed_fpm, fpm, vs,
+            ias_kt, ias, speed,
+            g_force, g,
+            bank_deg, pitch_deg, icao,
+            banner_options, banner_fields
+        } = req.body;
+
+        const finalFpm = typeof vertical_speed_fpm === 'number' ? vertical_speed_fpm : (typeof fpm === 'number' ? fpm : (typeof vs === 'number' ? vs : null));
+        const finalIas = typeof ias_kt === 'number' ? ias_kt : (typeof ias === 'number' ? ias : (typeof speed === 'number' ? speed : null));
+        const finalG = typeof g_force === 'number' ? g_force : (typeof g === 'number' ? g : null);
+        const finalHdg = typeof heading === 'number' ? heading : (typeof hdg === 'number' ? hdg : null);
 
         if (typeof lat !== 'number' || typeof lon !== 'number') {
             return res.status(400).json({ error: 'lat and lon must be numbers representing GPS decimal coordinates' });
@@ -2956,18 +3384,34 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
 
         // Derive landing quality rating if vertical speed or g-force is provided
         let landingRating = null;
-        if (typeof vertical_speed_fpm === 'number') {
-            const vs = Math.abs(vertical_speed_fpm);
-            if (vs < 80) landingRating = '🧈 Butter Smooth';
-            else if (vs < 160) landingRating = '✨ Good Landing';
-            else if (vs < 260) landingRating = '👌 Acceptable / Firm';
-            else if (vs < 400) landingRating = '⚠️ Hard Landing';
+        if (typeof finalFpm === 'number') {
+            const vsAbs = Math.abs(finalFpm);
+            if (vsAbs < 80) landingRating = '🧈 Butter Smooth';
+            else if (vsAbs < 160) landingRating = '✨ Good Landing';
+            else if (vsAbs < 260) landingRating = '👌 Acceptable / Firm';
+            else if (vsAbs < 400) landingRating = '⚠️ Hard Landing';
             else landingRating = '💥 Severe Impact';
         }
 
         let touchdownSummary = null;
         if (activeRunway && activeRunway.analysis) {
             const a = activeRunway.analysis;
+            const bannerMetrics = {
+                deviation_ft: a.deviation_ft,
+                side: a.side,
+                vertical_speed_fpm: finalFpm,
+                g_force: finalG,
+                ias_kt: finalIas,
+                heading_deg: typeof finalHdg === 'number' ? finalHdg : a.runway_heading_deg,
+                wind_dir: operationalCtx?.wind_dir ?? null,
+                wind_speed: operationalCtx?.wind_speed ?? null,
+                headwind_kt: a.headwind_kt,
+                crosswind_kt: a.crosswind_kt
+            };
+
+            const bannerOpts = banner_options || (banner_fields ? { fields: banner_fields } : {});
+            const bannerHtml = buildDeviationBannerHtml(bannerMetrics, bannerOpts);
+
             touchdownSummary = {
                 on_runway: a.on_runway,
                 runway_ident: a.runway_end_ident,
@@ -2996,14 +3440,16 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
                     summary: a.headwind_kt !== null ? `${a.headwind_kt >= 0 ? 'Headwind' : 'Tailwind'} ${Math.abs(a.headwind_kt)}kt, ${Math.abs(a.crosswind_kt || 0)}kt ${(a.crosswind_kt || 0) < 0 ? 'from left' : 'from right'}` : 'No wind data'
                 },
                 flight_telemetry: {
-                    aircraft_heading_deg: typeof heading === 'number' ? heading : null,
-                    vertical_speed_fpm: typeof vertical_speed_fpm === 'number' ? vertical_speed_fpm : null,
-                    ias_kt: typeof ias_kt === 'number' ? ias_kt : null,
-                    g_force: typeof g_force === 'number' ? g_force : null,
+                    aircraft_heading_deg: finalHdg,
+                    vertical_speed_fpm: finalFpm,
+                    ias_kt: finalIas,
+                    g_force: finalG,
                     bank_deg: typeof bank_deg === 'number' ? bank_deg : null,
                     pitch_deg: typeof pitch_deg === 'number' ? pitch_deg : null,
                     landing_rating: landingRating
-                }
+                },
+                banner_html: bannerHtml,
+                banner_data: bannerMetrics
             };
         }
 
@@ -3013,20 +3459,25 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
         const isOffAirfield = !activeOnRunway && !activeRunway?.analysis?.near_runway && (distToAirportM > 3500);
         const distToAirportNm = Math.round((distToAirportM / 1852) * 10) / 10;
 
-        const geojsonOverlay = buildRunwayGeoJsonOverlay(lat, lon, activeRunway);
+
+
+        const isClosedRwy = activeRunway && (activeRunway.is_closed || activeRunway.analysis?.is_closed);
+        const geojsonOverlay = buildRunwayGeoJsonOverlay(lat, lon, activeRunway, { isOffAirfield, isClosed: isClosedRwy, onRunway: !!activeOnRunway });
+        const unifiedStyles = getUnifiedMapStyling({ onRunway: !!activeOnRunway, isClosed: !!isClosedRwy, onTaxiway: false, isOffAirfield });
+
         const staticMapData = {
-            satellite_url: buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, style: 'satellite-v9', activeRunway }),
+            satellite_url: buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, style: 'satellite-v9', activeRunway, isOffAirfield, isClosed: isClosedRwy }),
             runway_perspective_url: activeRunway?.analysis?.runway_heading_deg != null
-                ? buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, bearing: activeRunway.analysis.runway_heading_deg, pitch: 25, style: 'satellite-v9', activeRunway })
+                ? buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, bearing: activeRunway.analysis.runway_heading_deg, pitch: 25, style: 'satellite-v9', activeRunway, isOffAirfield, isClosed: isClosedRwy })
                 : null,
-            dark_mode_url: buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, style: 'dark-v11', activeRunway }),
+            dark_mode_url: buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, style: 'dark-v11', activeRunway, isOffAirfield, isClosed: isClosedRwy }),
             direct_image_api: `/api/v1/map/static?lat=${lat}&lon=${lon}&zoom=16&style=satellite`
         };
 
         const liveMapUrl = `/?lat=${lat}&lon=${lon}&zoom=18`;
 
         if (isOffAirfield) {
-            return res.json({
+            const offAirfieldPayload = {
                 status: 'off_airfield',
                 touchdown_coordinates: { latitude: lat, longitude: lon },
                 nearest_airport: primaryAirport ? {
@@ -3042,13 +3493,15 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
                 live_map_url: liveMapUrl,
                 static_map: staticMapData,
                 geojson_overlay: geojsonOverlay,
+                map_styling: unifiedStyles,
                 message: primaryAirport
                     ? `Touchdown located off-airfield near ${primaryAirport.icao} (${primaryAirport.name}, ${distToAirportNm} NM away).`
                     : `Touchdown located at non-airfield coordinates: ${lat}, ${lon}.`
-            });
+            };
+            return res.json(filterResponseFields(offAirfieldPayload, req));
         }
 
-        res.json({
+        const touchdownResponsePayload = {
             status: activeOnRunway ? 'on_runway' : (activeRunway?.analysis?.near_runway ? 'near_runway' : 'off_runway'),
             touchdown_coordinates: { latitude: lat, longitude: lon },
             airport: primaryAirport ? {
@@ -3063,6 +3516,7 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
             live_map_url: liveMapUrl,
             static_map: staticMapData,
             geojson_overlay: geojsonOverlay,
+            map_styling: unifiedStyles,
             all_runways: analyzedRunways.map(r => ({
                 runway: `${r.le_ident}/${r.he_ident}`,
                 length_ft: r.length_ft,
@@ -3080,7 +3534,9 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
                 metar_raw: weatherSources.metar?.text || null,
                 atis_raw: (weatherSources.real_world || weatherSources.vatsim || weatherSources.ivao)?.text || null
             }
-        });
+        };
+
+        res.json(filterResponseFields(touchdownResponsePayload, req));
     } catch (err) {
         console.error('Error in /api/v1/touchdown:', err);
         res.status(500).json({ error: 'Touchdown analysis error: ' + err.message });

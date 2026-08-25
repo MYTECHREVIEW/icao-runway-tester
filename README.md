@@ -18,31 +18,44 @@ High-precision ICAO runway touchdown analyzer with real-time FAA D-ATIS, VATSIM 
 ---
 
 
-### 🛬 Runway Highlight Overlay & Centerline Deviation Vector
-When touchdown coordinates are pushed via the API, URL parameters, or `postMessage`:
-- **🟢 Active Runway Polygon:** Luminous green boundary highlighting the surveyed runway pavement.
-- **⚪ Runway Centerline:** Crisp white surveyed centerline.
-- **🔴 Fire Red Touchdown Dot:** High-contrast pinpoint (`#ff1e42`) with center reticle.
-- **🔴 Centerline Deviation Vector:** Perpendicular dashed vector showing exact cross-track distance and side (e.g. `📐 12.4 ft LEFT`).
-- **🖼️ Embedded in Mapbox Static Images:** All static map images automatically embed the runway polygon and deviation vector at calibrated Zoom 16.
+### 🎨 Unified Runway Overlays & Dot Styling
+When touchdown coordinates are pushed via the API, URL parameters, or `postMessage`, the system provides **100% visual continuation** across web maps, mobile apps, and Mapbox static images:
+- **🟢 Active Lit Runway Polygon:** Emerald green boundary (`#00ff88`, `0.18` fill opacity, `2.5px` border) highlighting the surveyed active runway pavement.
+- **🔴 Closed Runway Warning:** Crimson overlay (`#ff4757`, `0.35` fill opacity, `3.5px` border) for NOTAM-closed runways.
+- **⚪ Runway Centerline:** Surveyed geodetic centerline (`#ffffff`, `2.0px` width, `8,6` dash).
+- **🔴 Centerline Deviation Vector:** Perpendicular vector (`#ff1e42`, `3.5px` width, `5,5` dash) showing cross-track deviation distance and side.
+- **🟢 Centerline Intersection Point:** Projection point with emerald green halo ring (`#00ff88`).
+- **🎯 3-Tier Target Reticle:** Glowing outer halo (`10.5m` radius @ `35%` opacity), main target ring (`6.5m` radius with white border), and pinpoint core (`2.0m`). Color-coded: Fire Red (on runway), Crimson (closed), Amber (taxiway), Orange (off-airfield).
+- **🖼️ High-Res Mapbox Static Images:** All static map images (`GET /api/v1/map/static` and `/api/v1/touchdown`) embed this complete GeoJSON overlay directly at calibrated **Zoom 16**.
 
 ---
 
 ## 📡 Developer REST API & Integration
 
-Complete, step-by-step developer documentation is available in [API_DOCUMENTATION.md](./API_DOCUMENTATION.md).
+Complete developer reference, styling tokens, and multi-language implementation guides are in [API_DOCUMENTATION.md](./API_DOCUMENTATION.md).
 
 ### Endpoints Overview
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/v1/touchdown` | **Core Landing Telemetry:** Evaluates touchdown coordinates, calculates centerline deviation, threshold distance, touchdown zone, headwind/crosswind, landing rating, and static map URLs. |
-| `GET` | `/api/v1/map/static` | **Mapbox Static Images:** Render high-res satellite or dark static image with Fire Red touchdown pinpoint. |
+| `POST` | `/api/v1/touchdown` | **Core Landing Telemetry:** Evaluates touchdown coordinates, calculates centerline deviation, threshold distance, touchdown zone, headwind/crosswind, landing rating, GeoJSON overlay, and static map URLs. |
+| `GET` | `/api/v1/map/static` | **Mapbox Static Images:** Streams PNG binary or returns JSON with embedded GeoJSON runway overlay & touchdown reticle. |
 | `GET` | `/api/v1/airport/:icao` | Full airport metadata, elevation, geographic coordinates, and classification. |
 | `GET` | `/api/v1/airport/:icao/runways` | All calibrated runways with coordinates, true headings, length, width, and surface. |
 | `GET` | `/api/v1/airports/search?q=` | Search 85,917 airports by ICAO, IATA, name, or city. |
 | `GET` | `/api/v1/airport/:icao/weather` | Live operational weather suite: FAA D-ATIS, VATSIM ATIS, IVAO ATIS, and NOAA METAR. |
 | `GET` | `/api/v1/airport/:icao/notams` | Active airport NOTAMs and closed runway designator alerts. |
+
+### Dynamic Field & Metric Query Filtering
+
+Filter returned response fields to minimize bandwidth and tailor JSON outputs:
+```bash
+# Query only specific JSON blocks and telemetry metrics:
+curl -X POST "https://your-server.com/api/v1/touchdown?fields=touchdown,map_styling,static_map&metrics=dev,fpm,g" \
+  -H "X-API-Key: rwy_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{"lat": 40.77665, "lon": -73.87185, "vertical_speed_fpm": -135, "g_force": 1.14, "ias_kt": 132, "heading": 212}'
+```
 
 ### Quick Example (cURL)
 
@@ -65,8 +78,7 @@ curl -X POST https://your-server.com/api/v1/touchdown \
 External apps can open or embed the web map with touchdown coordinates automatically:
 
 ```
-https://your-server.com/?touchdown=40.77665,-73.87185
-https://your-server.com/?lat=40.77665&lon=-73.87185&icao=KLGA&fpm=-135&ias=132&g=1.14&zoom=18
+https://your-server.com/?touchdown=40.77665,-73.87185&fpm=-135&ias=132&g=1.14&hdg=212&zoom=18
 ```
 
 👉 **See the complete documentation with JavaScript, Python, C#, and Swift examples in [API_DOCUMENTATION.md](./API_DOCUMENTATION.md).**

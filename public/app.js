@@ -114,6 +114,8 @@ function showTaxiwayPopup(twy, latlng) {
 }
 
 // ── Programmatic Touchdown GPS Coordinate Injection ───────────────────────────
+window.currentTouchdownTelemetry = {};
+
 function pushTouchdownCoordinates(lat, lon, opts = {}) {
     lat = parseFloat(lat);
     lon = parseFloat(lon);
@@ -122,6 +124,7 @@ function pushTouchdownCoordinates(lat, lon, opts = {}) {
         return;
     }
 
+    window.currentTouchdownTelemetry = { ...opts, lat, lon };
     selectedRunwayKey = null;
     selectedTaxiwayRef = null;
 
@@ -129,7 +132,7 @@ function pushTouchdownCoordinates(lat, lon, opts = {}) {
         pinMarker = L.marker([lat, lon], { icon: pinIcon(true, false, false), draggable: true }).addTo(map);
         pinMarker.on('dragend', function(e) {
             const pos = e.target.getLatLng();
-            analyzePoint(pos.lat, pos.lng);
+            analyzePoint(pos.lat, pos.lng, null, window.currentTouchdownTelemetry);
         });
     } else {
         pinMarker.setLatLng([lat, lon]);
@@ -141,7 +144,7 @@ function pushTouchdownCoordinates(lat, lon, opts = {}) {
     } else {
         map.setView([lat, lon], zoomLevel);
     }
-    analyzePoint(lat, lon, opts.icao || null);
+    analyzePoint(lat, lon, opts.icao || null, opts);
 
     const fpmText = opts.fpm ? ` (VS: ${opts.fpm} fpm)` : '';
     showEditorToast(`🛬 Touchdown registered at ${lat.toFixed(6)}, ${lon.toFixed(6)}${fpmText}`, 4500);
@@ -737,6 +740,145 @@ function getRunwayKey(r) {
   return `${r.airport_icao || ''}_${r.le_ident || ''}_${r.he_ident || ''}`;
 }
 
+// ── Reusable Touchdown Deviation & Telemetry Banner Builder ───────────────────
+function buildDeviationBannerHtml(metrics = {}, options = {}) {
+    const {
+        deviation_ft = null,
+        side = 'center',
+        vertical_speed_fpm = null,
+        g_force = null,
+        ias_kt = null,
+        heading_deg = null,
+        wind_dir = null,
+        wind_speed = null,
+        headwind_kt = null,
+        crosswind_kt = null
+    } = metrics;
+
+    const requestedFields = options.fields ? (Array.isArray(options.fields) ? options.fields : String(options.fields).split(',').map(s => s.trim().toLowerCase())) : null;
+    const omittedFields = options.omit ? (Array.isArray(options.omit) ? options.omit : String(options.omit).split(',').map(s => s.trim().toLowerCase())) : [];
+
+    const isEnabled = (...fieldNames) => {
+        for (const f of fieldNames) {
+            const low = f.toLowerCase();
+            if (options[`show_${low}`] === false || options[low] === false) return false;
+            if (omittedFields.includes(low)) return false;
+        }
+        if (requestedFields && requestedFields.length > 0) {
+            return fieldNames.some(f => requestedFields.includes(f.toLowerCase()));
+        }
+        return true;
+    };
+
+    const rows = [];
+
+    // 1. Centerline Deviation
+    if (isEnabled('dev', 'deviation') && deviation_ft !== null && !isNaN(deviation_ft)) {
+        const absDev = Math.abs(deviation_ft).toFixed(1);
+        const sideTxt = (side || 'center').toUpperCase();
+        rows.push(`
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="display:flex; align-items:center; gap:6px; color:#cbd5e1; font-weight:600; font-size:11.5px;">
+                    <span style="font-size:13px;">📐</span>
+                    <span style="letter-spacing:0.5px;">DEVIATION:</span>
+                </div>
+                <span style="color:#ff1e42; font-weight:800; font-size:13px;">${absDev} ft ${sideTxt}</span>
+            </div>
+        `.trim());
+    }
+
+    // 2. Vertical Speed (FPM)
+    if (isEnabled('fpm', 'vertical_speed', 'vs') && vertical_speed_fpm !== null && !isNaN(vertical_speed_fpm)) {
+        const vs = Math.abs(vertical_speed_fpm);
+        const fpmColor = vs < 120 ? '#00ff88' : (vs < 220 ? '#38bdf8' : (vs < 350 ? '#f59e0b' : '#ef4444'));
+        const vsSign = vertical_speed_fpm < 0 ? '-' : (vertical_speed_fpm > 0 ? '+' : '');
+        rows.push(`
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="display:flex; align-items:center; gap:6px; color:#cbd5e1; font-weight:600; font-size:11.5px;">
+                    <span style="font-size:13px;">⚡</span>
+                    <span style="letter-spacing:0.5px;">VERT SPEED:</span>
+                </div>
+                <span style="color:${fpmColor}; font-weight:800; font-size:13px;">${vsSign}${vs.toFixed(0)} FPM</span>
+            </div>
+        `.trim());
+    }
+
+    // 3. G-Force
+    if (isEnabled('g', 'g_force') && g_force !== null && !isNaN(g_force)) {
+        const gVal = parseFloat(g_force);
+        const gColor = gVal < 1.3 ? '#00ff88' : (gVal < 1.7 ? '#f59e0b' : '#ef4444');
+        rows.push(`
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="display:flex; align-items:center; gap:6px; color:#cbd5e1; font-weight:600; font-size:11.5px;">
+                    <span style="font-size:13px;">🎯</span>
+                    <span style="letter-spacing:0.5px;">G-FORCE:</span>
+                </div>
+                <span style="color:${gColor}; font-weight:800; font-size:13px;">${gVal.toFixed(2)} G</span>
+            </div>
+        `.trim());
+    }
+
+    // 4. Speed & Direction of Landing (with rotated arrow in front)
+    if (isEnabled('speed', 'heading', 'ias', 'hdg', 'landing_vector') && (ias_kt !== null || heading_deg !== null)) {
+        const hdg = heading_deg !== null ? Math.round(heading_deg) : 0;
+        const arrowSvg = heading_deg !== null ? `
+            <svg viewBox="0 0 24 24" width="14" height="14" style="transform: rotate(${hdg}deg); transform-origin: center; display: inline-block; vertical-align: middle; fill: #38bdf8;">
+                <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+            </svg>
+        `.trim() : '';
+        const speedTxt = ias_kt !== null ? `${Math.round(ias_kt)} kt` : '';
+        const hdgTxt = heading_deg !== null ? `${hdg}°` : '';
+        rows.push(`
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="display:flex; align-items:center; gap:6px; color:#cbd5e1; font-weight:600; font-size:11.5px;">
+                    <span style="font-size:13px;">🛬</span>
+                    <span style="letter-spacing:0.5px;">LANDING:</span>
+                </div>
+                <div style="display:inline-flex; align-items:center; gap:5px; color:#38bdf8; font-weight:800; font-size:13px;">
+                    ${arrowSvg}
+                    <span>${speedTxt} · ${hdgTxt}</span>
+                </div>
+            </div>
+        `.trim());
+    }
+
+    // 5. Wind Speed & Direction (with rotated arrow in front)
+    if (isEnabled('wind', 'wind_vector') && (wind_dir !== null || wind_speed !== null)) {
+        const wDir = wind_dir !== null ? Math.round(wind_dir) : 0;
+        const wSpd = wind_speed !== null ? Math.round(wind_speed) : 0;
+        const windArrowSvg = wind_dir !== null ? `
+            <svg viewBox="0 0 24 24" width="14" height="14" style="transform: rotate(${wDir}deg); transform-origin: center; display: inline-block; vertical-align: middle; fill: #c084fc;">
+                <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+            </svg>
+        `.trim() : '';
+        rows.push(`
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="display:flex; align-items:center; gap:6px; color:#cbd5e1; font-weight:600; font-size:11.5px;">
+                    <span style="font-size:13px;">💨</span>
+                    <span style="letter-spacing:0.5px;">WIND:</span>
+                </div>
+                <div style="display:inline-flex; align-items:center; gap:5px; color:#c084fc; font-weight:800; font-size:13px;">
+                    ${windArrowSvg}
+                    <span>${wDir}° @ ${wSpd} kt</span>
+                </div>
+            </div>
+        `.trim());
+    }
+
+    if (rows.length === 0) return '';
+
+    const pos = options.position || (side === 'left' ? 'bottom-left' : 'bottom-right');
+    const transformStyle = pos === 'bottom-left'
+        ? 'transform: translate(calc(-100% - 24px), 24px);'
+        : 'transform: translate(24px, 24px);';
+
+    return `
+        <div class="touchdown-deviation-banner" style="background: rgba(15,23,42,0.96); border: 1.5px solid rgba(255,30,66,0.7); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.85); backdrop-filter: blur(10px); display: flex; flex-direction: column; padding: 7px 12px; gap: 5px; min-width: 175px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: nowrap; pointer-events: none; ${transformStyle} z-index: 1000;">
+            ${rows.join('<div style="width:100%; height:1px; background:rgba(255,255,255,0.08); margin:1px 0;"></div>')}
+        </div>
+    `.trim();
+}
+
 function drawRunways(data) {
   let allRunways = data.runways || [];
 
@@ -886,13 +1028,32 @@ function drawRunways(data) {
     }).addTo(map);
     runwayLayers.push(centerPoint);
 
-    // Floating Deviation Badge on Map
+    // Floating Deviation & Multi-Metric Telemetry Banner on Map (Offset away from vector & touchdown dot)
     if (a.deviation_ft && Math.abs(a.deviation_ft) > 0.5) {
       const midLat = (data.lat + projLat) / 2;
       const midLon = (data.lon + projLon) / 2;
-      const devBadgeHtml = `<div style="background: rgba(15,23,42,0.92); color: #ff1e42; font-weight: 800; font-size: 10.5px; padding: 2px 7px; border-radius: 4px; border: 1.5px solid #ff1e42; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.7); pointer-events: none;">📐 ${Math.abs(a.deviation_ft).toFixed(1)} ft ${(a.side || '').toUpperCase()}</div>`;
-      const devBadge = L.marker([midLat, midLon], {
-        icon: L.divIcon({ className: 'aviation-sign-icon', html: devBadgeHtml, iconSize: null, iconAnchor: [30, 10] })
+
+      const fpmVal = data.fpm ?? window.currentTouchdownTelemetry?.fpm ?? data.flight_telemetry?.vertical_speed_fpm ?? null;
+      const gVal   = data.g ?? window.currentTouchdownTelemetry?.g ?? data.flight_telemetry?.g_force ?? null;
+      const iasVal = data.ias ?? window.currentTouchdownTelemetry?.ias ?? data.flight_telemetry?.ias_kt ?? null;
+      const hdgVal = data.hdg ?? window.currentTouchdownTelemetry?.hdg ?? data.flight_telemetry?.aircraft_heading_deg ?? a.runway_heading_deg ?? null;
+
+      const bannerMetrics = {
+        deviation_ft: a.deviation_ft,
+        side: a.side,
+        vertical_speed_fpm: fpmVal !== null && !isNaN(parseFloat(fpmVal)) ? parseFloat(fpmVal) : null,
+        g_force: gVal !== null && !isNaN(parseFloat(gVal)) ? parseFloat(gVal) : null,
+        ias_kt: iasVal !== null && !isNaN(parseFloat(iasVal)) ? parseFloat(iasVal) : null,
+        heading_deg: hdgVal !== null && !isNaN(parseFloat(hdgVal)) ? parseFloat(hdgVal) : null,
+        wind_dir: data.operational?.wind_dir ?? null,
+        wind_speed: data.operational?.wind_speed ?? null,
+        headwind_kt: a.headwind_kt,
+        crosswind_kt: a.crosswind_kt
+      };
+
+      const devBadgeHtml = data.banner_html || buildDeviationBannerHtml(bannerMetrics, data.banner_options || {});
+      const devBadge = L.marker([data.lat, data.lon], {
+        icon: L.divIcon({ className: 'aviation-sign-icon', html: devBadgeHtml, iconSize: null, iconAnchor: [0, 0] })
       }).addTo(map);
       runwayLayers.push(devBadge);
     }
@@ -1529,7 +1690,7 @@ function showLoading(show) {
 
 // ── API Call ──────────────────────────────────────────────────────────────────
 
-async function analyzePoint(lat, lon, icao = null) {
+async function analyzePoint(lat, lon, icao = null, telemetryOpts = {}) {
   showLoading(true);
   clearRunwayLayers();
 
@@ -1538,13 +1699,21 @@ async function analyzePoint(lat, lon, icao = null) {
     pinMarker.unbindPopup();
   }
 
+  const mergedOpts = { ...window.currentTouchdownTelemetry, ...telemetryOpts };
+
   try {
     const reqBody = {
       lat,
       lon,
-      preferredSource: userSourcePref
+      preferredSource: userSourcePref,
+      fpm: mergedOpts.fpm || mergedOpts.vertical_speed_fpm,
+      ias: mergedOpts.ias || mergedOpts.ias_kt || mergedOpts.speed,
+      g: mergedOpts.g || mergedOpts.g_force,
+      hdg: mergedOpts.hdg || mergedOpts.heading,
+      banner_options: mergedOpts.banner_options,
+      banner_fields: mergedOpts.banner_fields
     };
-    if (icao) reqBody.icao = icao;
+    if (icao || mergedOpts.icao) reqBody.icao = icao || mergedOpts.icao;
 
     const resp = await fetch('/api/analyze', {
       method: 'POST',
@@ -1552,6 +1721,12 @@ async function analyzePoint(lat, lon, icao = null) {
       body: JSON.stringify(reqBody)
     });
     const data = await resp.json();
+
+    // Preserve telemetry on data object
+    data.fpm = reqBody.fpm;
+    data.ias = reqBody.ias;
+    data.g = reqBody.g;
+    data.hdg = reqBody.hdg;
 
     showLoading(false);
     updateResults(data);
