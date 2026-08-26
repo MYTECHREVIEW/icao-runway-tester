@@ -11,6 +11,7 @@ High-precision runway touchdown telemetry, certified geodetic runway data, multi
    - [Target Dot Visual Hierarchy (Runway vs Closed vs Taxiway vs Off-Airfield)](#2-target-dot-visual-hierarchy)
    - [GeoJSON FeatureCollection Overlay (`geojson_overlay`)](#3-geojson-featurecollection-overlay-geojson_overlay)
    - [Mapbox High-Res Static Snapshots](#4-mapbox-high-res-static-snapshots)
+   - [Accessing & Parsing Style Tokens in Client Apps](#5-accessing--parsing-style-tokens-in-client-apps)
 3. [Field & Metric Query Filtering](#-field--metric-query-filtering)
 4. [Endpoints Directory](#-endpoints-directory)
 5. [Endpoints Reference](#-endpoints-reference)
@@ -83,6 +84,43 @@ The API generates static map snapshot URLs with the entire styled runway geometr
 - `runway_perspective_url`: Oriented along runway approach heading (`bearing: heading`, `pitch: 25°`).
 - `dark_mode_url`: High-contrast dark vector map.
 - `direct_image_api`: Binary endpoint `GET /api/v1/map/static` that streams PNG bytes directly.
+
+---
+
+### 5. Accessing & Parsing Style Tokens in Client Apps
+
+All styling tokens are delivered in **two places** in the `POST /api/v1/touchdown` response:
+
+1. **Root-Level Design Tokens (`response.map_styling`)**:
+   Direct access to the exact color tokens, stroke widths, opacities, and dash arrays:
+   ```javascript
+   // JavaScript / TypeScript Access Example:
+   const runwayFill = data.map_styling.runway_overlay.fill;          // e.g. "#00ff88"
+   const runwayOpacity = data.map_styling.runway_overlay.fill_opacity; // e.g. 0.18
+   const centerlineColor = data.map_styling.centerline.stroke;        // "#ffffff"
+   const deviationLine = data.map_styling.centerline_deviation_vector.stroke; // "#ff1e42"
+   const targetDotFill = data.map_styling.touchdown_dot.fill;        // "#ff1e42"
+   ```
+
+2. **Per-Feature GeoJSON Properties (`response.geojson_overlay.features[i].properties`)**:
+   Standard simple-style attributes embedded directly in each GeoJSON feature:
+   ```javascript
+   // Leaflet or Mapbox GL Feature Styling:
+   L.geoJSON(data.geojson_overlay, {
+     style: (feature) => ({
+       color: feature.properties.stroke,
+       weight: feature.properties['stroke-width'],
+       fillColor: feature.properties.fill,
+       fillOpacity: feature.properties['fill-opacity']
+     })
+   }).addTo(map);
+   ```
+
+> [!IMPORTANT]
+> **Common Gotcha — Root Key vs Nested**:
+> `map_styling` is located at the **root** of the API response (`response.map_styling`), **NOT** inside `response.touchdown.map_styling`.
+> 
+> If your application is using field filtering (e.g. `?fields=touchdown`), the server will omit `map_styling` unless you explicitly include it: `?fields=touchdown,map_styling,geojson_overlay`.
 
 ---
 
