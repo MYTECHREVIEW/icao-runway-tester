@@ -979,8 +979,8 @@ function drawRunways(data) {
     }
   }
 
-  // Perpendicular Deviation Line
-  if (data.within_runway_scope && data.active_runway && data.active_runway.analysis) {
+  // Perpendicular Deviation Line and Runway Centerline Projections
+  if (data.active_runway && data.active_runway.analysis) {
     const ar = data.active_runway;
     const a = ar.analysis;
 
@@ -994,69 +994,70 @@ function drawRunways(data) {
     const endLat = isLeLanding ? ar.he_latitude : ar.le_latitude;
     const endLon = isLeLanding ? ar.he_longitude : ar.le_longitude;
 
-    const lat1 = thrLat * rad;
-    const lon1 = thrLon * rad;
-    const dLon = (endLon - thrLon) * rad;
-    const y = Math.sin(dLon) * Math.cos(endLat * rad);
-    const x = Math.cos(lat1) * Math.sin(endLat * rad) - Math.sin(lat1) * Math.cos(endLat * rad) * Math.cos(dLon);
-    const brg = Math.atan2(y, x);
+    if (thrLat && thrLon && endLat && endLon) {
+      const lat1 = thrLat * rad;
+      const lon1 = thrLon * rad;
+      const dLon = (endLon - thrLon) * rad;
+      const y = Math.sin(dLon) * Math.cos(endLat * rad);
+      const x = Math.cos(lat1) * Math.sin(endLat * rad) - Math.sin(lat1) * Math.cos(endLat * rad) * Math.cos(dLon);
+      const brg = Math.atan2(y, x);
 
-    const dR = atd_m / R;
-    const projLatR = Math.asin(Math.sin(lat1) * Math.cos(dR) + Math.cos(lat1) * Math.sin(dR) * Math.cos(brg));
-    const projLonR = lon1 + Math.atan2(Math.sin(brg) * Math.sin(dR) * Math.cos(lat1), Math.cos(dR) - Math.sin(lat1) * Math.sin(projLatR));
+      const dR = atd_m / R;
+      const projLatR = Math.asin(Math.sin(lat1) * Math.cos(dR) + Math.cos(lat1) * Math.sin(dR) * Math.cos(brg));
+      const projLonR = lon1 + Math.atan2(Math.sin(brg) * Math.sin(dR) * Math.cos(lat1), Math.cos(dR) - Math.sin(lat1) * Math.sin(projLatR));
 
-    const projLat = projLatR / rad;
-    const projLon = projLonR / rad;
+      const projLat = projLatR / rad;
+      const projLon = projLonR / rad;
 
-    devLineLayer = L.polyline(
-      [[data.lat, data.lon], [projLat, projLon]],
-      {
-        color: '#ff1e42',
-        weight: 3.5,
-        dashArray: '5,5',
-        opacity: 0.98
-      }
-    ).addTo(map);
-    runwayLayers.push(devLineLayer);
+      devLineLayer = L.polyline(
+        [[data.lat, data.lon], [projLat, projLon]],
+        {
+          color: '#ff1e42',
+          weight: 3.5,
+          dashArray: '5,5',
+          opacity: 0.98
+        }
+      ).addTo(map);
+      runwayLayers.push(devLineLayer);
 
-    const centerPoint = L.circleMarker([projLat, projLon], {
-      radius: 4.5,
-      color: '#ffffff',
-      fillColor: '#00ff88',
-      fillOpacity: 1,
-      weight: 2
-    }).addTo(map);
-    runwayLayers.push(centerPoint);
-
-    // Floating Deviation & Multi-Metric Telemetry Banner on Map (Offset away from vector & touchdown dot)
-    if (a.deviation_ft && Math.abs(a.deviation_ft) > 0.5) {
-      const midLat = (data.lat + projLat) / 2;
-      const midLon = (data.lon + projLon) / 2;
-
-      const fpmVal = data.fpm ?? window.currentTouchdownTelemetry?.fpm ?? data.flight_telemetry?.vertical_speed_fpm ?? null;
-      const gVal   = data.g ?? window.currentTouchdownTelemetry?.g ?? data.flight_telemetry?.g_force ?? null;
-      const iasVal = data.ias ?? window.currentTouchdownTelemetry?.ias ?? data.flight_telemetry?.ias_kt ?? null;
-      const hdgVal = data.hdg ?? window.currentTouchdownTelemetry?.hdg ?? data.flight_telemetry?.aircraft_heading_deg ?? a.runway_heading_deg ?? null;
-
-      const bannerMetrics = {
-        deviation_ft: a.deviation_ft,
-        side: a.side,
-        vertical_speed_fpm: fpmVal !== null && !isNaN(parseFloat(fpmVal)) ? parseFloat(fpmVal) : null,
-        g_force: gVal !== null && !isNaN(parseFloat(gVal)) ? parseFloat(gVal) : null,
-        ias_kt: iasVal !== null && !isNaN(parseFloat(iasVal)) ? parseFloat(iasVal) : null,
-        heading_deg: hdgVal !== null && !isNaN(parseFloat(hdgVal)) ? parseFloat(hdgVal) : null,
-        wind_dir: data.operational?.wind_dir ?? null,
-        wind_speed: data.operational?.wind_speed ?? null,
-        headwind_kt: a.headwind_kt,
-        crosswind_kt: a.crosswind_kt
-      };
-
-      const devBadgeHtml = data.banner_html || buildDeviationBannerHtml(bannerMetrics, data.banner_options || {});
-      const devBadge = L.marker([data.lat, data.lon], {
-        icon: L.divIcon({ className: 'aviation-sign-icon', html: devBadgeHtml, iconSize: null, iconAnchor: [0, 0] })
+      const centerPoint = L.circleMarker([projLat, projLon], {
+        radius: 4.5,
+        color: '#ffffff',
+        fillColor: '#00ff88',
+        fillOpacity: 1,
+        weight: 2
       }).addTo(map);
-      runwayLayers.push(devBadge);
+      runwayLayers.push(centerPoint);
     }
+  }
+
+  // Floating Deviation & Multi-Metric Telemetry Banner on Map
+  const fpmVal = data.fpm ?? window.currentTouchdownTelemetry?.fpm ?? data.flight_telemetry?.vertical_speed_fpm ?? null;
+  const gVal   = data.g ?? window.currentTouchdownTelemetry?.g ?? data.flight_telemetry?.g_force ?? null;
+  const iasVal = data.ias ?? window.currentTouchdownTelemetry?.ias ?? data.flight_telemetry?.ias_kt ?? null;
+  const hdgVal = data.hdg ?? window.currentTouchdownTelemetry?.hdg ?? data.flight_telemetry?.aircraft_heading_deg ?? data.active_runway?.analysis?.runway_heading_deg ?? null;
+
+  const hasTelemetry = (fpmVal !== null || gVal !== null || iasVal !== null || hdgVal !== null || data.banner_html || (data.active_runway?.analysis?.deviation_ft != null));
+  if (hasTelemetry && data.lat && data.lon) {
+    const a = data.active_runway?.analysis;
+    const bannerMetrics = {
+      deviation_ft: a ? a.deviation_ft : null,
+      side: a ? a.side : 'center',
+      vertical_speed_fpm: fpmVal !== null && !isNaN(parseFloat(fpmVal)) ? parseFloat(fpmVal) : null,
+      g_force: gVal !== null && !isNaN(parseFloat(gVal)) ? parseFloat(gVal) : null,
+      ias_kt: iasVal !== null && !isNaN(parseFloat(iasVal)) ? parseFloat(iasVal) : null,
+      heading_deg: hdgVal !== null && !isNaN(parseFloat(hdgVal)) ? parseFloat(hdgVal) : null,
+      wind_dir: data.operational?.wind_dir ?? null,
+      wind_speed: data.operational?.wind_speed ?? null,
+      headwind_kt: a ? a.headwind_kt : null,
+      crosswind_kt: a ? a.crosswind_kt : null
+    };
+
+    const devBadgeHtml = data.banner_html || buildDeviationBannerHtml(bannerMetrics, data.banner_options || {});
+    const devBadge = L.marker([data.lat, data.lon], {
+      icon: L.divIcon({ className: 'aviation-sign-icon', html: devBadgeHtml, iconSize: null, iconAnchor: [0, 0] })
+    }).addTo(map);
+    runwayLayers.push(devBadge);
   }
 
   // Draw Taxiway Layer

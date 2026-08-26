@@ -1356,8 +1356,8 @@ app.post('/api/analyze', async (req, res) => {
     });
 
     const onRunway = analyzedRunways.find(r => r.analysis.on_runway) || null;
-    const isNearRunwayScope = analyzedRunways.some(r => r.analysis.near_runway || r.analysis.on_runway);
-    const activeRunway = onRunway || (isNearRunwayScope ? analyzedRunways[0] : null);
+    const isNearRunwayScope = analyzedRunways.some(r => r.analysis.near_runway || r.analysis.on_runway) || (analyzedRunways.length > 0 && analyzedRunways[0].dist_to_midpoint_m < 5000);
+    const activeRunway = onRunway || (isNearRunwayScope ? analyzedRunways[0] : (analyzedRunways.length > 0 ? analyzedRunways[0] : null));
 
     // 5. Fetch & Correlate Taxiways with NOTAMs
     const rawTaxiways = selectedAirportIcao ? await getAirportTaxiways(selectedAirportIcao, primaryAirport?.latitude, primaryAirport?.longitude) : [];
