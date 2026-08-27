@@ -12,6 +12,7 @@ High-precision runway touchdown telemetry, certified geodetic runway data, multi
    - [GeoJSON FeatureCollection Overlay (`geojson_overlay`)](#3-geojson-featurecollection-overlay-geojson_overlay)
    - [Mapbox High-Res Static Snapshots](#4-mapbox-high-res-static-snapshots)
    - [Accessing & Parsing Style Tokens in Client Apps](#5-accessing--parsing-style-tokens-in-client-apps)
+   - [How to Request Runway Polygon & Centerline](#6-how-to-request-runway-polygon--centerline)
 3. [Field & Metric Query Filtering](#-field--metric-query-filtering)
 4. [Endpoints Directory](#-endpoints-directory)
 5. [Endpoints Reference](#-endpoints-reference)
@@ -121,6 +122,81 @@ All styling tokens are delivered in **two places** in the `POST /api/v1/touchdow
 > `map_styling` is located at the **root** of the API response (`response.map_styling`), **NOT** inside `response.touchdown.map_styling`.
 > 
 > If your application is using field filtering (e.g. `?fields=touchdown`), the server will omit `map_styling` unless you explicitly include it: `?fields=touchdown,map_styling,geojson_overlay`.
+
+---
+
+### 6. How to Request Runway Polygon & Centerline
+
+You can obtain runway polygons and centerlines via two workflows:
+
+#### Workflow A: Pre-Calculated GeoJSON FeatureCollection (Dynamic Landing)
+Calling `POST /api/v1/touchdown` automatically computes the exact 4-corner runway polygon and centerline geometry:
+
+```bash
+curl -X POST https://maps.simtechtracker.com/api/v1/touchdown \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{ "lat": 40.77665, "lon": -73.87185, "heading": 212 }'
+```
+
+**Response (`geojson_overlay.features`)**:
+- **Runway Polygon (`element-type: "runway-overlay"`)**: 4-corner bounding rectangle oriented with runway heading.
+- **Centerline (`element-type: "runway-centerline"`)**: True geodetic LineString from landing threshold to opposite end.
+- **Deviation Vector (`element-type: "deviation-vector"`)**: Perpendicular cross-track offset line.
+
+**Mapbox GL JS Implementation**:
+```javascript
+map.addSource('runway-source', { type: 'geojson', data: data.geojson_overlay });
+
+// Add Runway Polygon Layer
+map.addLayer({
+  id: 'rwy-poly',
+  type: 'fill',
+  source: 'runway-source',
+  filter: ['==', 'element-type', 'runway-overlay'],
+  paint: { 'fill-color': ['get', 'fill'], 'fill-opacity': ['get', 'fill-opacity'] }
+});
+
+// Add Centerline Layer
+map.addLayer({
+  id: 'rwy-line',
+  type: 'line',
+  source: 'runway-source',
+  filter: ['==', 'element-type', 'runway-centerline'],
+  paint: { 'line-color': ['get', 'stroke'], 'line-width': ['get', 'stroke-width'] }
+});
+```
+
+#### Workflow B: Raw Threshold Endpoints (Airport Lookup)
+To get runway dimensions and threshold coordinates without a touchdown analysis:
+
+```bash
+curl -X GET https://maps.simtechtracker.com/api/v1/airport/KLGA/runways \
+  -H "X-API-Key: YOUR_API_KEY"
+```
+
+**Response**:
+```json
+{
+  "icao": "KLGA",
+  "runways": [
+    {
+      "le_ident": "04",
+      "he_ident": "22",
+      "length_ft": 7002,
+      "width_ft": 150,
+      "le_latitude_deg": 40.769168,
+      "le_longitude_deg": -73.884123,
+      "he_latitude_deg": 40.785440,
+      "he_longitude_deg": -73.870681
+    }
+  ]
+}
+```
+
+*Centerline = Line from `[le_latitude_deg, le_longitude_deg]` to `[he_latitude_deg, he_longitude_deg]`.*
+
+*4-Corner Polygon = Extrude centerline perpendicular by `(width_ft * 0.3048) / 2`.*
 
 ---
 
