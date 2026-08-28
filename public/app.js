@@ -433,30 +433,73 @@ let layerControl = L.control.layers({
 async function setupPrecisionMapbox() {
   try {
     const res = await fetch('/api/config');
+    if (!res.ok) throw new Error(`Config fetch failed: ${res.status}`);
     const cfg = await res.json();
     const token = cfg.mapboxToken || mapboxToken;
-    if (token) {
-      mapboxToken = token;
-      localStorage.setItem(MAPBOX_STORAGE_KEY, token);
+    if (!token) return;
 
-      if (currentMbLayer) {
-        map.removeLayer(currentMbLayer);
-        layerControl.removeLayer(currentMbLayer);
-      }
+    mapboxToken = token;
+    localStorage.setItem(MAPBOX_STORAGE_KEY, token);
 
-      currentMbLayer = getMapboxLayer(token);
-      if (currentMbLayer) {
-        map.eachLayer(l => {
-          if (l instanceof L.TileLayer) map.removeLayer(l);
-        });
-        currentMbLayer.addTo(map);
-        layerControl.addBaseLayer(currentMbLayer, '💎 Mapbox Maxar High-Precision Satellite');
-      }
+    // Remove any previously added Mapbox layer
+    if (currentMbLayer) {
+      map.removeLayer(currentMbLayer);
+      layerControl.removeLayer(currentMbLayer);
+      currentMbLayer = null;
     }
+
+    const mbLayer = getMapboxLayer(token);
+    if (!mbLayer) return;
+
+    // ── Safe swap: add Mapbox FIRST, wait for first tile, THEN remove fallback ──
+    mbLayer.addTo(map);
+    layerControl.addBaseLayer(mbLayer, '💎 Mapbox Maxar High-Precision Satellite');
+    currentMbLayer = mbLayer;
+
+    let swapDone = false;
+
+    // Success: a tile loaded — safe to remove Google fallback
+    mbLayer.once('tileload', () => {
+      if (swapDone) return;
+      swapDone = true;
+      map.eachLayer(l => {
+        if (l instanceof L.TileLayer && l !== mbLayer) map.removeLayer(l);
+      });
+    });
+
+    // Failure: Mapbox tiles errored (expired/invalid token) — restore Google fallback
+    mbLayer.once('tileerror', () => {
+      if (swapDone) return;
+      swapDone = true;
+      console.warn('[Map] Mapbox tile error — reverting to Google satellite fallback.');
+      map.removeLayer(mbLayer);
+      layerControl.removeLayer(mbLayer);
+      currentMbLayer = null;
+      if (!map.hasLayer(fallbackGoogle)) {
+        fallbackGoogle.addTo(map);
+      }
+    });
+
+    // Timeout guard: if no tile event fires in 8s, restore fallback
+    setTimeout(() => {
+      if (!swapDone) {
+        swapDone = true;
+        console.warn('[Map] Mapbox tile load timeout — restoring fallback.');
+        if (!map.hasLayer(fallbackGoogle)) {
+          fallbackGoogle.addTo(map);
+        }
+      }
+    }, 8000);
+
   } catch (e) {
-    console.warn('Could not fetch server config:', e);
+    console.warn('[Map] Could not fetch server config:', e.message);
+    // Ensure fallback is always visible
+    if (!map.hasLayer(fallbackGoogle)) {
+      fallbackGoogle.addTo(map);
+    }
   }
 }
+
 
 setupPrecisionMapbox();
 
