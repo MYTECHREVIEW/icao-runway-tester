@@ -181060,5 +181060,13 @@
     "stands": [],
     "bays": [],
     "hold_points": []
+  },
+  "VNSI": {
+    "icao": "VNSI",
+    "terminals": [],
+    "gates": [],
+    "stands": [],
+    "bays": [],
+    "hold_points": []
   }
 }
