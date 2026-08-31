@@ -181813,5 +181813,13 @@
       }
     ],
     "hold_points": []
+  },
+  "KOXC": {
+    "icao": "KOXC",
+    "terminals": [],
+    "gates": [],
+    "stands": [],
+    "bays": [],
+    "hold_points": []
   }
 }

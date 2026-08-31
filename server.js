@@ -2837,6 +2837,34 @@ function getUnifiedMapStyling(context = {}) {
     };
 }
 
+function projectPointOntoRunwayCenterline(pLat, pLon, aLat, aLon, bLat, bLon) {
+    const lat1 = aLat * RAD, lon1 = aLon * RAD;
+    const lat2 = bLat * RAD, lon2 = bLon * RAD;
+    const pL   = pLat * RAD, pLo  = pLon * RAD;
+
+    const cosLat = Math.cos((lat1 + lat2) / 2);
+    const x1 = 0, y1 = 0;
+    const x2 = (lon2 - lon1) * cosLat * EARTH_RADIUS_M;
+    const y2 = (lat2 - lat1) * EARTH_RADIUS_M;
+    const px = (pLo - lon1) * cosLat * EARTH_RADIUS_M;
+    const py = (pL - lat1) * EARTH_RADIUS_M;
+
+    const dx = x2 - x1, dy = y2 - y1;
+    const segLenSq = dx * dx + dy * dy;
+    if (segLenSq < 1e-6) {
+        return { latitude: aLat, longitude: aLon, t: 0 };
+    }
+
+    let t = (px * dx + py * dy) / segLenSq;
+    t = Math.max(0, Math.min(1, t));
+
+    return {
+        latitude: aLat + t * (bLat - aLat),
+        longitude: aLon + t * (bLon - aLon),
+        t: t
+    };
+}
+
 // ── Build Runway GeoJSON Overlay with Exact Web-App Target Dot Styling ────────
 function buildRunwayGeoJsonOverlay(lat, lon, activeRunway, options = {}) {
     const cleanLat = parseFloat(lat);
@@ -2925,7 +2953,8 @@ function buildRunwayGeoJsonOverlay(lat, lon, activeRunway, options = {}) {
 
     const rwy = activeRunway;
     const halfWidthM = ((rwy.width_ft || 150) * 0.3048) / 2;
-    const brng = rwy.centerline_bearing_deg || 0;
+    const trueBearing = bearingTo(rwy.le_latitude, rwy.le_longitude, rwy.he_latitude, rwy.he_longitude);
+    const brng = rwy.centerline_bearing_deg || trueBearing;
 
     const c1 = destinationPoint(rwy.le_latitude, rwy.le_longitude, brng - 90, halfWidthM);
     const c2 = destinationPoint(rwy.le_latitude, rwy.le_longitude, brng + 90, halfWidthM);
@@ -2933,12 +2962,8 @@ function buildRunwayGeoJsonOverlay(lat, lon, activeRunway, options = {}) {
     const c4 = destinationPoint(rwy.he_latitude, rwy.he_longitude, brng - 90, halfWidthM);
 
     const a = rwy.analysis || {};
-    const dt_m = ((a.end_code === 'le' ? rwy.le_displaced_threshold_ft : rwy.he_displaced_threshold_ft) || 0) * 0.3048;
-    const totalAlongM = (a.distance_from_threshold_m || 0) + dt_m;
-    const originLat = a.end_code === 'le' ? rwy.le_latitude : rwy.he_latitude;
-    const originLon = a.end_code === 'le' ? rwy.le_longitude : rwy.he_longitude;
-    const rwyHdg = a.runway_heading_deg || brng;
-    const projPoint = destinationPoint(originLat, originLon, rwyHdg, totalAlongM);
+    // Calculate exact orthogonal projection of touchdown point onto the surveyed centerline segment [LE, HE]
+    const projPoint = projectPointOntoRunwayCenterline(cleanLat, cleanLon, rwy.le_latitude, rwy.le_longitude, rwy.he_latitude, rwy.he_longitude);
 
     const rwyStyle = styles.runway_overlay;
 

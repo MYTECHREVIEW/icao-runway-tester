@@ -107,13 +107,19 @@ services:
       - API_KEY=your_master_api_key       # Optional fallback API key
 ```
 
-### Option B: Local Development
-```bash
-# Install dependencies
-npm install
+### Option B: Local Development Launchers
 
-# Start server
-PORT=3500 ADMIN_KEY=admin123 npm start
+You can launch and stop the local development server with single-click launchers without opening a terminal:
+
+- **🎨 Visual GUI Launcher:** Double-click [`Launch-GUI.bat`](file:///Z:/icao-runway-tester/Launch-GUI.bat) or [`Launch-GUI.vbs`](file:///Z:/icao-runway-tester/Launch-GUI.vbs) to open the dark-themed desktop controller with real-time status, Start/Stop/Restart, and Open UI buttons.
+- **⚡ Quick Start:** Double-click [`start-server.bat`](file:///Z:/icao-runway-tester/start-server.bat) to launch the Node server and open your browser automatically.
+- **🛑 Quick Stop:** Double-click [`stop-server.bat`](file:///Z:/icao-runway-tester/stop-server.bat) to cleanly terminate the server on port 3500.
+- **📋 Interactive Console Menu:** Double-click [`launcher.bat`](file:///Z:/icao-runway-tester/launcher.bat) for an interactive terminal menu.
+- **📌 Desktop Shortcuts:** Double-click [`create-desktop-shortcut.bat`](file:///Z:/icao-runway-tester/create-desktop-shortcut.bat) to place shortcuts directly on your Windows Desktop.
+
+```bash
+# Or manual terminal command:
+npm start
 ```
 
 Visit `http://localhost:3500` for the map and `http://localhost:3500/admin` for the API key manager.
