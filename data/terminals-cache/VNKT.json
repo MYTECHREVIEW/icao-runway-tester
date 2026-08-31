@@ -1,0 +1,745 @@
+{
+  "icao": "VNKT",
+  "terminals": [],
+  "gates": [
+    {
+      "id": 61000000,
+      "ref": "5",
+      "name": "Gate 5",
+      "lat": 27.699605,
+      "lon": 85.357554,
+      "lead_in_coords": null
+    },
+    {
+      "id": 61000001,
+      "ref": "1",
+      "name": "Gate 1",
+      "lat": 27.697032,
+      "lon": 85.356852,
+      "lead_in_coords": null
+    },
+    {
+      "id": 61000002,
+      "ref": "4",
+      "name": "Gate 4",
+      "lat": 27.699023,
+      "lon": 85.357308,
+      "lead_in_coords": null
+    },
+    {
+      "id": 61000003,
+      "ref": "2",
+      "name": "Gate 2",
+      "lat": 27.697642,
+      "lon": 85.357131,
+      "lead_in_coords": null
+    },
+    {
+      "id": 61000004,
+      "ref": "3",
+      "name": "Gate 3",
+      "lat": 27.698399,
+      "lon": 85.356985,
+      "lead_in_coords": null
+    },
+    {
+      "id": 61000005,
+      "ref": "DEPARTURE A",
+      "name": "Gate DEPARTURE A",
+      "lat": 27.699876,
+      "lon": 85.356865,
+      "lead_in_coords": null
+    },
+    {
+      "id": 61000006,
+      "ref": "6",
+      "name": "Gate 6",
+      "lat": 27.700129,
+      "lon": 85.357792,
+      "lead_in_coords": null
+    },
+    {
+      "id": 61000007,
+      "ref": "7",
+      "name": "Gate 7",
+      "lat": 27.700558,
+      "lon": 85.357976,
+      "lead_in_coords": null
+    },
+    {
+      "id": 61000008,
+      "ref": "8",
+      "name": "Gate 8",
+      "lat": 27.700932,
+      "lon": 85.358142,
+      "lead_in_coords": null
+    },
+    {
+      "id": 61000009,
+      "ref": "9",
+      "name": "Gate 9",
+      "lat": 27.701335,
+      "lon": 85.358322,
+      "lead_in_coords": null
+    },
+    {
+      "id": 61000010,
+      "ref": "10",
+      "name": "Gate 10",
+      "lat": 27.701709,
+      "lon": 85.358497,
+      "lead_in_coords": null
+    },
+    {
+      "id": 61000011,
+      "ref": "11",
+      "name": "Gate 11",
+      "lat": 27.70188,
+      "lon": 85.359244,
+      "lead_in_coords": null
+    }
+  ],
+  "stands": [
+    {
+      "id": 10000000,
+      "ref": "5",
+      "name": "Stand 5",
+      "max_wingspan_m": null,
+      "lat": 27.699605,
+      "lon": 85.357554,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000001,
+      "ref": "1",
+      "name": "Stand 1",
+      "max_wingspan_m": null,
+      "lat": 27.697032,
+      "lon": 85.356852,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000002,
+      "ref": "4",
+      "name": "Stand 4",
+      "max_wingspan_m": null,
+      "lat": 27.699023,
+      "lon": 85.357308,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000003,
+      "ref": "2",
+      "name": "Stand 2",
+      "max_wingspan_m": null,
+      "lat": 27.697642,
+      "lon": 85.357131,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000004,
+      "ref": "3",
+      "name": "Stand 3",
+      "max_wingspan_m": null,
+      "lat": 27.698399,
+      "lon": 85.356985,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000005,
+      "ref": "DEPARTURE A",
+      "name": "Stand DEPARTURE A",
+      "max_wingspan_m": null,
+      "lat": 27.699876,
+      "lon": 85.356865,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000006,
+      "ref": "6",
+      "name": "Stand 6",
+      "max_wingspan_m": null,
+      "lat": 27.700129,
+      "lon": 85.357792,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000007,
+      "ref": "7",
+      "name": "Stand 7",
+      "max_wingspan_m": null,
+      "lat": 27.700558,
+      "lon": 85.357976,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000008,
+      "ref": "8",
+      "name": "Stand 8",
+      "max_wingspan_m": null,
+      "lat": 27.700932,
+      "lon": 85.358142,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000009,
+      "ref": "9",
+      "name": "Stand 9",
+      "max_wingspan_m": null,
+      "lat": 27.701335,
+      "lon": 85.358322,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000010,
+      "ref": "10",
+      "name": "Stand 10",
+      "max_wingspan_m": null,
+      "lat": 27.701709,
+      "lon": 85.358497,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000011,
+      "ref": "11",
+      "name": "Stand 11",
+      "max_wingspan_m": null,
+      "lat": 27.70188,
+      "lon": 85.359244,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000012,
+      "ref": "D1",
+      "name": "Stand D1",
+      "max_wingspan_m": null,
+      "lat": 27.704933,
+      "lon": 85.360799,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000013,
+      "ref": "D2",
+      "name": "Stand D2",
+      "max_wingspan_m": null,
+      "lat": 27.704855,
+      "lon": 85.359995,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000014,
+      "ref": "D3",
+      "name": "Stand D3",
+      "max_wingspan_m": null,
+      "lat": 27.705143,
+      "lon": 85.359882,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000015,
+      "ref": "D4",
+      "name": "Stand D4",
+      "max_wingspan_m": null,
+      "lat": 27.70552,
+      "lon": 85.359734,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000016,
+      "ref": "D7",
+      "name": "Stand D7",
+      "max_wingspan_m": null,
+      "lat": 27.706325,
+      "lon": 85.359456,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000017,
+      "ref": "D8",
+      "name": "Stand D8",
+      "max_wingspan_m": null,
+      "lat": 27.706716,
+      "lon": 85.359319,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000018,
+      "ref": "D5",
+      "name": "Stand D5",
+      "max_wingspan_m": null,
+      "lat": 27.705857,
+      "lon": 85.359618,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000019,
+      "ref": "D6",
+      "name": "Stand D6",
+      "max_wingspan_m": null,
+      "lat": 27.706079,
+      "lon": 85.359541,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000020,
+      "ref": "D9",
+      "name": "Stand D9",
+      "max_wingspan_m": null,
+      "lat": 27.707238,
+      "lon": 85.359292,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000021,
+      "ref": "D10",
+      "name": "Stand D10",
+      "max_wingspan_m": null,
+      "lat": 27.70733,
+      "lon": 85.359615,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000022,
+      "ref": "D11",
+      "name": "Stand D11",
+      "max_wingspan_m": null,
+      "lat": 27.707446,
+      "lon": 85.359984,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000023,
+      "ref": "D17",
+      "name": "Stand D17",
+      "max_wingspan_m": null,
+      "lat": 27.705602,
+      "lon": 85.360554,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000024,
+      "ref": "D16",
+      "name": "Stand D16",
+      "max_wingspan_m": null,
+      "lat": 27.705905,
+      "lon": 85.360443,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000025,
+      "ref": "D15",
+      "name": "Stand D15",
+      "max_wingspan_m": null,
+      "lat": 27.706207,
+      "lon": 85.360332,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000026,
+      "ref": "D14",
+      "name": "Stand D14",
+      "max_wingspan_m": null,
+      "lat": 27.706498,
+      "lon": 85.360226,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000027,
+      "ref": "D13",
+      "name": "Stand D13",
+      "max_wingspan_m": null,
+      "lat": 27.706878,
+      "lon": 85.360087,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000028,
+      "ref": "D12",
+      "name": "Stand D12",
+      "max_wingspan_m": null,
+      "lat": 27.707088,
+      "lon": 85.36001,
+      "lead_in_coords": null
+    }
+  ],
+  "bays": [
+    {
+      "id": "bay_5",
+      "ref": "5",
+      "name": "Gate 5",
+      "type": "gate",
+      "has_jetbridge": true,
+      "lat": 27.699605,
+      "lon": 85.357554,
+      "jetbridge_lat": 27.699605,
+      "jetbridge_lon": 85.357554,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_1",
+      "ref": "1",
+      "name": "Gate 1",
+      "type": "gate",
+      "has_jetbridge": true,
+      "lat": 27.697032,
+      "lon": 85.356852,
+      "jetbridge_lat": 27.697032,
+      "jetbridge_lon": 85.356852,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_4",
+      "ref": "4",
+      "name": "Gate 4",
+      "type": "gate",
+      "has_jetbridge": true,
+      "lat": 27.699023,
+      "lon": 85.357308,
+      "jetbridge_lat": 27.699023,
+      "jetbridge_lon": 85.357308,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_2",
+      "ref": "2",
+      "name": "Gate 2",
+      "type": "gate",
+      "has_jetbridge": true,
+      "lat": 27.697642,
+      "lon": 85.357131,
+      "jetbridge_lat": 27.697642,
+      "jetbridge_lon": 85.357131,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_3",
+      "ref": "3",
+      "name": "Gate 3",
+      "type": "gate",
+      "has_jetbridge": true,
+      "lat": 27.698399,
+      "lon": 85.356985,
+      "jetbridge_lat": 27.698399,
+      "jetbridge_lon": 85.356985,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_DEPARTURE A",
+      "ref": "DEPARTURE A",
+      "name": "Gate DEPARTURE A",
+      "type": "gate",
+      "has_jetbridge": true,
+      "lat": 27.699876,
+      "lon": 85.356865,
+      "jetbridge_lat": 27.699876,
+      "jetbridge_lon": 85.356865,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_6",
+      "ref": "6",
+      "name": "Gate 6",
+      "type": "gate",
+      "has_jetbridge": true,
+      "lat": 27.700129,
+      "lon": 85.357792,
+      "jetbridge_lat": 27.700129,
+      "jetbridge_lon": 85.357792,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_7",
+      "ref": "7",
+      "name": "Gate 7",
+      "type": "gate",
+      "has_jetbridge": true,
+      "lat": 27.700558,
+      "lon": 85.357976,
+      "jetbridge_lat": 27.700558,
+      "jetbridge_lon": 85.357976,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_8",
+      "ref": "8",
+      "name": "Gate 8",
+      "type": "gate",
+      "has_jetbridge": true,
+      "lat": 27.700932,
+      "lon": 85.358142,
+      "jetbridge_lat": 27.700932,
+      "jetbridge_lon": 85.358142,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_9",
+      "ref": "9",
+      "name": "Gate 9",
+      "type": "gate",
+      "has_jetbridge": true,
+      "lat": 27.701335,
+      "lon": 85.358322,
+      "jetbridge_lat": 27.701335,
+      "jetbridge_lon": 85.358322,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_10",
+      "ref": "10",
+      "name": "Gate 10",
+      "type": "gate",
+      "has_jetbridge": true,
+      "lat": 27.701709,
+      "lon": 85.358497,
+      "jetbridge_lat": 27.701709,
+      "jetbridge_lon": 85.358497,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_11",
+      "ref": "11",
+      "name": "Gate 11",
+      "type": "gate",
+      "has_jetbridge": true,
+      "lat": 27.70188,
+      "lon": 85.359244,
+      "jetbridge_lat": 27.70188,
+      "jetbridge_lon": 85.359244,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D1",
+      "ref": "D1",
+      "name": "Stand D1",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.704933,
+      "lon": 85.360799,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D2",
+      "ref": "D2",
+      "name": "Stand D2",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.704855,
+      "lon": 85.359995,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D3",
+      "ref": "D3",
+      "name": "Stand D3",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.705143,
+      "lon": 85.359882,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D4",
+      "ref": "D4",
+      "name": "Stand D4",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.70552,
+      "lon": 85.359734,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D7",
+      "ref": "D7",
+      "name": "Stand D7",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.706325,
+      "lon": 85.359456,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D8",
+      "ref": "D8",
+      "name": "Stand D8",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.706716,
+      "lon": 85.359319,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D5",
+      "ref": "D5",
+      "name": "Stand D5",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.705857,
+      "lon": 85.359618,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D6",
+      "ref": "D6",
+      "name": "Stand D6",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.706079,
+      "lon": 85.359541,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D9",
+      "ref": "D9",
+      "name": "Stand D9",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.707238,
+      "lon": 85.359292,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D10",
+      "ref": "D10",
+      "name": "Stand D10",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.70733,
+      "lon": 85.359615,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D11",
+      "ref": "D11",
+      "name": "Stand D11",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.707446,
+      "lon": 85.359984,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D17",
+      "ref": "D17",
+      "name": "Stand D17",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.705602,
+      "lon": 85.360554,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D16",
+      "ref": "D16",
+      "name": "Stand D16",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.705905,
+      "lon": 85.360443,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D15",
+      "ref": "D15",
+      "name": "Stand D15",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.706207,
+      "lon": 85.360332,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D14",
+      "ref": "D14",
+      "name": "Stand D14",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.706498,
+      "lon": 85.360226,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D13",
+      "ref": "D13",
+      "name": "Stand D13",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.706878,
+      "lon": 85.360087,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    },
+    {
+      "id": "bay_D12",
+      "ref": "D12",
+      "name": "Stand D12",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": 27.707088,
+      "lon": 85.36001,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 0,
+      "max_wingspan_m": null
+    }
+  ],
+  "hold_points": []
+}
