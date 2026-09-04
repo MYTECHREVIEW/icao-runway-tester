@@ -3013,8 +3013,8 @@ function buildRunwayGeoJsonOverlay(lat, lon, activeRunway, options = {}) {
         }
     ];
 
-    // 3. Centerline Deviation Vector & Centerline Intersection Dot
-    if (a.deviation_ft && Math.abs(a.deviation_ft) > 0.5) {
+    // 3. Centerline Deviation Vector & Centerline Intersection Dot (Only if deviation > 3.5 ft)
+    if (a.deviation_ft && Math.abs(a.deviation_ft) > 3.5) {
         features.push({
             type: 'Feature',
             properties: {
@@ -3202,6 +3202,185 @@ function buildDeviationBannerHtml(metrics = {}, options = {}) {
     `.trim();
 }
 
+// ── Mapbox Clean Simplestyle GeoJSON Overlay (Pure Simplestyle Spec) ─────────
+function buildCleanSimplestyleGeoJson(lat, lon, activeRunway, options = {}) {
+    const cleanLat = parseFloat(lat);
+    const cleanLon = parseFloat(lon);
+
+    const isClosed = options.isClosed || (activeRunway && (activeRunway.is_closed || activeRunway.analysis?.is_closed));
+    const onTaxiway = options.onTaxiway;
+    const isOffAirfield = options.isOffAirfield;
+    const onRunway = !isOffAirfield && !onTaxiway && (options.onRunway ?? (activeRunway?.analysis?.on_runway || true));
+
+    const styles = getUnifiedMapStyling({ onRunway, isClosed, onTaxiway, isOffAirfield });
+    const dotColor = styles.touchdown_dot.fill;
+
+    // Arrow pointing to Touchdown Dot
+    let arrowAngle = 315;
+    if (activeRunway && activeRunway.le_latitude && activeRunway.he_latitude) {
+        const trueBearing = bearingTo(activeRunway.le_latitude, activeRunway.le_longitude, activeRunway.he_latitude, activeRunway.he_longitude);
+        const brng = activeRunway.centerline_bearing_deg || trueBearing;
+        arrowAngle = (brng - 110 + 360) % 360;
+    }
+
+    const tip = destinationPoint(cleanLat, cleanLon, arrowAngle, 1.2);
+    const headBase = destinationPoint(cleanLat, cleanLon, arrowAngle, 6.5);
+    const headLeft = destinationPoint(headBase.latitude, headBase.longitude, arrowAngle - 90, 2.2);
+    const headRight = destinationPoint(headBase.latitude, headBase.longitude, arrowAngle + 90, 2.2);
+    const tail = destinationPoint(cleanLat, cleanLon, arrowAngle, 14.0);
+
+    // Tiny Precision Touchdown Dot (Radius: 0.45m, solid color with no white)
+    const dotCoords = createCirclePolygon(cleanLat, cleanLon, 0.45, 10);
+
+    const features = [
+        // Arrow Stem
+        {
+            type: 'Feature',
+            properties: {
+                stroke: dotColor,
+                'stroke-width': 2.5,
+                'stroke-opacity': 0.95
+            },
+            geometry: {
+                type: 'LineString',
+                coordinates: [
+                    [parseFloat(tail.longitude.toFixed(6)), parseFloat(tail.latitude.toFixed(6))],
+                    [parseFloat(headBase.longitude.toFixed(6)), parseFloat(headBase.latitude.toFixed(6))]
+                ]
+            }
+        },
+        // Arrow Head (Filled Triangle Pointer)
+        {
+            type: 'Feature',
+            properties: {
+                stroke: dotColor,
+                'stroke-width': 1.5,
+                fill: dotColor,
+                'fill-opacity': 1.0
+            },
+            geometry: {
+                type: 'Polygon',
+                coordinates: [[
+                    [parseFloat(tip.longitude.toFixed(6)), parseFloat(tip.latitude.toFixed(6))],
+                    [parseFloat(headLeft.longitude.toFixed(6)), parseFloat(headLeft.latitude.toFixed(6))],
+                    [parseFloat(headRight.longitude.toFixed(6)), parseFloat(headRight.latitude.toFixed(6))],
+                    [parseFloat(tip.longitude.toFixed(6)), parseFloat(tip.latitude.toFixed(6))]
+                ]]
+            }
+        },
+        // Solid Touchdown Dot
+        {
+            type: 'Feature',
+            properties: {
+                stroke: dotColor,
+                'stroke-width': 0.5,
+                fill: dotColor,
+                'fill-opacity': 1.0
+            },
+            geometry: {
+                type: 'Polygon',
+                coordinates: [dotCoords]
+            }
+        }
+    ];
+
+    if (activeRunway && activeRunway.le_latitude && activeRunway.he_latitude) {
+        const rwy = activeRunway;
+        const halfWidthM = ((rwy.width_ft || 150) * 0.3048) / 2;
+        const trueBearing = bearingTo(rwy.le_latitude, rwy.le_longitude, rwy.he_latitude, rwy.he_longitude);
+        const brng = rwy.centerline_bearing_deg || trueBearing;
+
+        const c1 = destinationPoint(rwy.le_latitude, rwy.le_longitude, brng - 90, halfWidthM);
+        const c2 = destinationPoint(rwy.le_latitude, rwy.le_longitude, brng + 90, halfWidthM);
+        const c3 = destinationPoint(rwy.he_latitude, rwy.he_longitude, brng + 90, halfWidthM);
+        const c4 = destinationPoint(rwy.he_latitude, rwy.he_longitude, brng - 90, halfWidthM);
+
+        const rwyStyle = styles.runway_overlay;
+        const a = rwy.analysis || {};
+        const projPoint = projectPointOntoRunwayCenterline(cleanLat, cleanLon, rwy.le_latitude, rwy.le_longitude, rwy.he_latitude, rwy.he_longitude);
+
+        // Prepend Runway Polygon and Centerline
+        features.unshift(
+            // Runway Outline Polygon
+            {
+                type: 'Feature',
+                properties: {
+                    stroke: rwyStyle.stroke,
+                    'stroke-width': rwyStyle.stroke_width,
+                    fill: rwyStyle.fill,
+                    'fill-opacity': rwyStyle.fill_opacity
+                },
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [[
+                        [parseFloat(c1.longitude.toFixed(6)), parseFloat(c1.latitude.toFixed(6))],
+                        [parseFloat(c2.longitude.toFixed(6)), parseFloat(c2.latitude.toFixed(6))],
+                        [parseFloat(c3.longitude.toFixed(6)), parseFloat(c3.latitude.toFixed(6))],
+                        [parseFloat(c4.longitude.toFixed(6)), parseFloat(c4.latitude.toFixed(6))],
+                        [parseFloat(c1.longitude.toFixed(6)), parseFloat(c1.latitude.toFixed(6))]
+                    ]]
+                }
+            },
+            // Centerline
+            {
+                type: 'Feature',
+                properties: {
+                    stroke: styles.centerline.stroke,
+                    'stroke-width': styles.centerline.stroke_width,
+                    'stroke-opacity': styles.centerline.stroke_opacity
+                },
+                geometry: {
+                    type: 'LineString',
+                    coordinates: [
+                        [parseFloat(rwy.le_longitude.toFixed(6)), parseFloat(rwy.le_latitude.toFixed(6))],
+                        [parseFloat(rwy.he_longitude.toFixed(6)), parseFloat(rwy.he_latitude.toFixed(6))]
+                    ]
+                }
+            }
+        );
+
+        // Centerline Deviation Vector & Centerline Intersection Dot (Only if deviation > 3.5 ft)
+        if (a.deviation_ft && Math.abs(a.deviation_ft) > 3.5) {
+            features.push({
+                type: 'Feature',
+                properties: {
+                    stroke: styles.centerline_deviation_vector.stroke,
+                    'stroke-width': styles.centerline_deviation_vector.stroke_width,
+                    'stroke-opacity': styles.centerline_deviation_vector.stroke_opacity
+                },
+                geometry: {
+                    type: 'LineString',
+                    coordinates: [
+                        [cleanLon, cleanLat],
+                        [parseFloat(projPoint.longitude.toFixed(6)), parseFloat(projPoint.latitude.toFixed(6))]
+                    ]
+                }
+            });
+
+            // Centerline Intersection Dot (Tiny Precision 0.35m radius, solid green)
+            const centerDotCoords = createCirclePolygon(projPoint.latitude, projPoint.longitude, 0.35, 10);
+            features.push({
+                type: 'Feature',
+                properties: {
+                    stroke: styles.centerline_intersection_dot.fill,
+                    'stroke-width': 0.5,
+                    fill: styles.centerline_intersection_dot.fill,
+                    'fill-opacity': 1.0
+                },
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [centerDotCoords]
+                }
+            });
+        }
+    }
+
+    return {
+        type: 'FeatureCollection',
+        features
+    };
+}
+
 // ── Mapbox Static Map Generator ───────────────────────────────────────────────
 function buildMapboxStaticUrl({
     lat,
@@ -3238,8 +3417,9 @@ function buildMapboxStaticUrl({
     const cleanLat = parseFloat(lat);
     const cleanLon = parseFloat(lon);
 
-    const geojsonObj = buildRunwayGeoJsonOverlay(cleanLat, cleanLon, activeRunway, { isOffAirfield, onTaxiway, isClosed });
-    const geojsonStr = encodeURIComponent(JSON.stringify(geojsonObj));
+    const geojsonObj = buildCleanSimplestyleGeoJson(cleanLat, cleanLon, activeRunway, { isOffAirfield, onTaxiway, isClosed });
+    // Sanitize any stray parenthesis and encode
+    const geojsonStr = encodeURIComponent(JSON.stringify(geojsonObj).replace(/[()]/g, ''));
     return `https://api.mapbox.com/styles/v1/${styleId}/static/geojson(${geojsonStr})/${cleanLon.toFixed(6)},${cleanLat.toFixed(6)},${z},${b},${p}/${w}x${h}${retinaStr}?access_token=${token}`;
 }
 
@@ -3490,13 +3670,14 @@ app.post('/api/v1/touchdown', requireApiKey, async (req, res) => {
         const geojsonOverlay = buildRunwayGeoJsonOverlay(lat, lon, activeRunway, { isOffAirfield, isClosed: isClosedRwy, onRunway: !!activeOnRunway });
         const unifiedStyles = getUnifiedMapStyling({ onRunway: !!activeOnRunway, isClosed: !!isClosedRwy, onTaxiway: false, isOffAirfield });
 
+        const mapZoom = req.body?.zoom || req.query?.zoom || 17.5;
         const staticMapData = {
-            satellite_url: buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, style: 'satellite-v9', activeRunway, isOffAirfield, isClosed: isClosedRwy }),
+            satellite_url: buildMapboxStaticUrl({ lat, lon, zoom: mapZoom, width: 800, height: 500, style: 'satellite-v9', activeRunway, isOffAirfield, isClosed: isClosedRwy }),
             runway_perspective_url: activeRunway?.analysis?.runway_heading_deg != null
-                ? buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, bearing: activeRunway.analysis.runway_heading_deg, pitch: 25, style: 'satellite-v9', activeRunway, isOffAirfield, isClosed: isClosedRwy })
+                ? buildMapboxStaticUrl({ lat, lon, zoom: mapZoom, width: 800, height: 500, bearing: activeRunway.analysis.runway_heading_deg, pitch: 25, style: 'satellite-v9', activeRunway, isOffAirfield, isClosed: isClosedRwy })
                 : null,
-            dark_mode_url: buildMapboxStaticUrl({ lat, lon, zoom: 16, width: 800, height: 500, style: 'dark-v11', activeRunway, isOffAirfield, isClosed: isClosedRwy }),
-            direct_image_api: `/api/v1/map/static?lat=${lat}&lon=${lon}&zoom=16&style=satellite`
+            dark_mode_url: buildMapboxStaticUrl({ lat, lon, zoom: mapZoom, width: 800, height: 500, style: 'dark-v11', activeRunway, isOffAirfield, isClosed: isClosedRwy }),
+            direct_image_api: `/api/v1/map/static?lat=${lat}&lon=${lon}&zoom=${mapZoom}&style=satellite`
         };
 
         const liveMapUrl = `/?lat=${lat}&lon=${lon}&zoom=18`;

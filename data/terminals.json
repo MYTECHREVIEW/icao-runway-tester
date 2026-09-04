@@ -182829,5 +182829,13 @@
     "stands": [],
     "bays": [],
     "hold_points": []
+  },
+  "LFMD": {
+    "icao": "LFMD",
+    "terminals": [],
+    "gates": [],
+    "stands": [],
+    "bays": [],
+    "hold_points": []
   }
 }
