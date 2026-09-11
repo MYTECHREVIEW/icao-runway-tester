@@ -1,0 +1,77 @@
+{
+  "icao": "SNTI",
+  "terminals": [
+    {
+      "id": "snti_t1",
+      "name": "Terminal de Passageiros",
+      "type": "terminal",
+      "polygon": [
+        [
+          -1.86877,
+          -55.5139
+        ],
+        [
+          -1.86885,
+          -55.51412
+        ],
+        [
+          -1.86873,
+          -55.51415
+        ],
+        [
+          -1.86865,
+          -55.51393
+        ],
+        [
+          -1.86877,
+          -55.5139
+        ]
+      ]
+    }
+  ],
+  "gates": [],
+  "stands": [
+    {
+      "id": 10000000,
+      "ref": "1",
+      "name": "Stand 1",
+      "max_wingspan_m": 24,
+      "lat": -1.8692350650677507,
+      "lon": -55.51608860492707,
+      "lead_in_coords": null
+    }
+  ],
+  "bays": [
+    {
+      "id": "bay_1",
+      "ref": "1",
+      "name": "Pátio Principal Stand 1",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": -1.8692350650677507,
+      "lon": -55.51608860492707,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 82,
+      "max_wingspan_m": 24
+    }
+  ],
+  "hold_points": [
+    {
+      "id": "hp_10",
+      "ref": "10",
+      "name": "Ponto de Espera 10",
+      "lat": -1.86888,
+      "lon": -55.5208,
+      "heading": 82
+    },
+    {
+      "id": "hp_28",
+      "ref": "28",
+      "name": "Ponto de Espera 28",
+      "lat": -1.86718,
+      "lon": -55.5083,
+      "heading": 262
+    }
+  ]
+}

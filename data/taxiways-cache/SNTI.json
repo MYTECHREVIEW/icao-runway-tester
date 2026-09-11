@@ -1,0 +1,90 @@
+{
+  "icao": "SNTI",
+  "segments": [
+    {
+      "id": 10091001,
+      "ref": "A",
+      "name": "Taxiway A (Apron Access)",
+      "type": "taxiway",
+      "surface": "asphalt",
+      "width_ft": 45,
+      "width_m": 14,
+      "coordinates": [
+        [
+          -1.86803,
+          -55.51453
+        ],
+        [
+          -1.86845,
+          -55.51425
+        ],
+        [
+          -1.8688,
+          -55.51405
+        ]
+      ]
+    },
+    {
+      "id": 10091002,
+      "ref": "THR10",
+      "name": "Bacia de Giro Cabeceira 10",
+      "type": "turnaround",
+      "surface": "asphalt",
+      "width_ft": 90,
+      "width_m": 27,
+      "coordinates": [
+        [
+          -1.86894,
+          -55.52121
+        ],
+        [
+          -1.86905,
+          -55.52135
+        ],
+        [
+          -1.86885,
+          -55.5214
+        ],
+        [
+          -1.86875,
+          -55.52125
+        ],
+        [
+          -1.86894,
+          -55.52121
+        ]
+      ]
+    },
+    {
+      "id": 10091003,
+      "ref": "THR28",
+      "name": "Bacia de Giro Cabeceira 28",
+      "type": "turnaround",
+      "surface": "asphalt",
+      "width_ft": 90,
+      "width_m": 27,
+      "coordinates": [
+        [
+          -1.8671,
+          -55.50785
+        ],
+        [
+          -1.8672,
+          -55.5077
+        ],
+        [
+          -1.867,
+          -55.50765
+        ],
+        [
+          -1.8669,
+          -55.5078
+        ],
+        [
+          -1.8671,
+          -55.50785
+        ]
+      ]
+    }
+  ]
+}

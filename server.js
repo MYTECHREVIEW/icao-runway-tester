@@ -1682,8 +1682,14 @@ app.post('/api/runways/save', devOnly, (req, res) => {
         if (r.he_heading_degT !== undefined) match.he_heading_degT = r.he_heading_degT;
         if (r.le_heading_degT !== undefined) match.le_heading_degT = r.le_heading_degT;
         if (r.centerline_bearing_deg !== undefined) match.centerline_bearing_deg = r.centerline_bearing_deg;
-        if (r.length_ft !== undefined) match.length_ft = r.length_ft;
-        if (r.width_ft !== undefined) match.width_ft = r.width_ft;
+        if (r.le_ident) match.le_ident = r.le_ident;
+        if (r.he_ident) match.he_ident = r.he_ident;
+        if (r.le_heading_deg !== undefined) match.le_heading_deg = r.le_heading_deg;
+        if (r.he_heading_deg !== undefined) match.he_heading_deg = r.he_heading_deg;
+        if (r.le_elevation_ft !== undefined) match.le_elevation_ft = r.le_elevation_ft;
+        if (r.he_elevation_ft !== undefined) match.he_elevation_ft = r.he_elevation_ft;
+        if (r.surface) match.surface = r.surface;
+        if (r.source_centerline) match.source_centerline = r.source_centerline;
       } else {
         existingList.push({
           airport_icao: upperIcao,
@@ -1693,12 +1699,27 @@ app.post('/api/runways/save', devOnly, (req, res) => {
           le_longitude: r.le_longitude,
           he_latitude: r.he_latitude,
           he_longitude: r.he_longitude,
+          le_heading_deg: r.le_heading_deg,
+          he_heading_deg: r.he_heading_deg,
+          le_elevation_ft: r.le_elevation_ft,
+          he_elevation_ft: r.he_elevation_ft,
+          surface: r.surface || 'asphalt',
+          source_centerline: r.source_centerline || 'SURVEY_CALIBRATED',
           centerline_bearing_deg: r.centerline_bearing_deg,
           length_ft: r.length_ft,
           width_ft: r.width_ft,
           latitude_deg: (r.le_latitude && r.he_latitude) ? (r.le_latitude + r.he_latitude) / 2 : undefined,
           longitude_deg: (r.le_longitude && r.he_longitude) ? (r.le_longitude + r.he_longitude) / 2 : undefined
         });
+      }
+
+      const targetRwy = match || existingList[existingList.length - 1];
+      const gLat = targetRwy.le_latitude ?? targetRwy.he_latitude;
+      const gLon = targetRwy.le_longitude ?? targetRwy.he_longitude;
+      if (gLat != null && gLon != null && typeof cellKey === 'function') {
+        const k = cellKey(gLat, gLon);
+        if (!runwayGrid[k]) runwayGrid[k] = [];
+        if (!runwayGrid[k].includes(targetRwy)) runwayGrid[k].push(targetRwy);
       }
     });
 
@@ -2497,12 +2518,12 @@ app.get('/api/v1/airport/:icao/runways', requireApiKey, (req, res) => {
         length_ft: r.length_ft ? parseInt(r.length_ft) : null,
         width_ft: r.width_ft ? parseInt(r.width_ft) : null,
         surface: r.surface || null,
-        le_heading_degT: r.le_heading_degT != null ? parseFloat(r.le_heading_degT) : null,
-        he_heading_degT: r.he_heading_degT != null ? parseFloat(r.he_heading_degT) : null,
-        le_latitude_deg: r.le_latitude_deg != null ? parseFloat(r.le_latitude_deg) : null,
-        le_longitude_deg: r.le_longitude_deg != null ? parseFloat(r.le_longitude_deg) : null,
-        he_latitude_deg: r.he_latitude_deg != null ? parseFloat(r.he_latitude_deg) : null,
-        he_longitude_deg: r.he_longitude_deg != null ? parseFloat(r.he_longitude_deg) : null,
+        le_heading_degT: r.le_heading_degT != null ? parseFloat(r.le_heading_degT) : (r.le_heading_deg != null ? parseFloat(r.le_heading_deg) : (r.centerline_bearing_deg != null ? parseFloat(r.centerline_bearing_deg) : null)),
+        he_heading_degT: r.he_heading_degT != null ? parseFloat(r.he_heading_degT) : (r.he_heading_deg != null ? parseFloat(r.he_heading_deg) : (r.centerline_bearing_deg != null ? (parseFloat(r.centerline_bearing_deg) + 180) % 360 : null)),
+        le_latitude_deg: r.le_latitude_deg != null ? parseFloat(r.le_latitude_deg) : (r.le_latitude != null ? parseFloat(r.le_latitude) : null),
+        le_longitude_deg: r.le_longitude_deg != null ? parseFloat(r.le_longitude_deg) : (r.le_longitude != null ? parseFloat(r.le_longitude) : null),
+        he_latitude_deg: r.he_latitude_deg != null ? parseFloat(r.he_latitude_deg) : (r.he_latitude != null ? parseFloat(r.he_latitude) : null),
+        he_longitude_deg: r.he_longitude_deg != null ? parseFloat(r.he_longitude_deg) : (r.he_longitude != null ? parseFloat(r.he_longitude) : null),
         is_closed: !!(r.closed || r.is_closed),
         lighted: !!(r.lighted),
     }));
