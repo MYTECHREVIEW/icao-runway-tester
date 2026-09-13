@@ -201208,5 +201208,13 @@
       }
     ],
     "hold_points": []
+  },
+  "LOWI": {
+    "icao": "LOWI",
+    "terminals": [],
+    "gates": [],
+    "stands": [],
+    "bays": [],
+    "hold_points": []
   }
 }
