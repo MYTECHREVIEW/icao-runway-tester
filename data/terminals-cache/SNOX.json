@@ -1,0 +1,131 @@
+{
+  "icao": "SNOX",
+  "terminals": [
+    {
+      "id": "snox_t1",
+      "name": "Terminal de Passageiros Oriximiná",
+      "type": "terminal",
+      "polygon": [
+        [
+          -1.7147029,
+          -55.8332553
+        ],
+        [
+          -1.7148333,
+          -55.8332052
+        ],
+        [
+          -1.7148446,
+          -55.8332346
+        ],
+        [
+          -1.7149095,
+          -55.8332096
+        ],
+        [
+          -1.7148986,
+          -55.833181
+        ],
+        [
+          -1.7149453,
+          -55.8331631
+        ],
+        [
+          -1.7149324,
+          -55.8331295
+        ],
+        [
+          -1.7149106,
+          -55.8330729
+        ],
+        [
+          -1.7146686,
+          -55.833166
+        ],
+        [
+          -1.7146793,
+          -55.8331938
+        ],
+        [
+          -1.7147029,
+          -55.8332553
+        ]
+      ]
+    }
+  ],
+  "gates": [],
+  "stands": [
+    {
+      "id": 10000000,
+      "ref": "1",
+      "name": "Stand 1",
+      "max_wingspan_m": 28,
+      "lat": -1.7153,
+      "lon": -55.8341,
+      "lead_in_coords": null
+    },
+    {
+      "id": 10000001,
+      "ref": "2",
+      "name": "Stand 2",
+      "max_wingspan_m": 28,
+      "lat": -1.7151,
+      "lon": -55.8337,
+      "lead_in_coords": null
+    }
+  ],
+  "bays": [
+    {
+      "id": "bay_1",
+      "ref": "1",
+      "name": "Pátio Stand 1",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": -1.7153,
+      "lon": -55.8341,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 159,
+      "max_wingspan_m": 28
+    },
+    {
+      "id": "bay_2",
+      "ref": "2",
+      "name": "Pátio Stand 2",
+      "type": "stand",
+      "has_jetbridge": false,
+      "lat": -1.7151,
+      "lon": -55.8337,
+      "jetbridge_lat": null,
+      "jetbridge_lon": null,
+      "heading": 159,
+      "max_wingspan_m": 28
+    }
+  ],
+  "hold_points": [
+    {
+      "id": "hp_17",
+      "ref": "17",
+      "name": "Ponto de Espera 17",
+      "lat": -1.70782,
+      "lon": -55.83863,
+      "heading": 159
+    },
+    {
+      "id": "hp_35",
+      "ref": "35",
+      "name": "Ponto de Espera 35",
+      "lat": -1.72015,
+      "lon": -55.83392,
+      "heading": 339
+    },
+    {
+      "id": "hp_a",
+      "ref": "A",
+      "name": "Ponto de Espera Pátio A",
+      "lat": -1.71584,
+      "lon": -55.83556,
+      "heading": 69
+    }
+  ]
+}
