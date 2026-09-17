@@ -197401,6 +197401,105 @@
       }
     ]
   },
+  "SWPI": {
+    "icao": "SWPI",
+    "terminals": [
+      {
+        "id": "swpi_t1",
+        "name": "Aeroporto Júlio Belém",
+        "type": "terminal",
+        "polygon": [
+          [
+            -2.669627,
+            -56.769807
+          ],
+          [
+            -2.669728,
+            -56.769712
+          ],
+          [
+            -2.669529,
+            -56.7695
+          ],
+          [
+            -2.669428,
+            -56.769595
+          ],
+          [
+            -2.669627,
+            -56.769807
+          ]
+        ]
+      }
+    ],
+    "gates": [],
+    "stands": [
+      {
+        "id": 10093001,
+        "ref": "1",
+        "name": "Stand 1",
+        "max_wingspan_m": 36,
+        "lat": -2.6689,
+        "lon": -56.7703,
+        "lead_in_coords": null
+      },
+      {
+        "id": 10093002,
+        "ref": "2",
+        "name": "Stand 2",
+        "max_wingspan_m": 36,
+        "lat": -2.6686,
+        "lon": -56.7700,
+        "lead_in_coords": null
+      }
+    ],
+    "bays": [
+      {
+        "id": "bay_1",
+        "ref": "1",
+        "name": "Pátio Principal Stand 1",
+        "type": "stand",
+        "has_jetbridge": false,
+        "lat": -2.6689,
+        "lon": -56.7703,
+        "jetbridge_lat": null,
+        "jetbridge_lon": null,
+        "heading": 316,
+        "max_wingspan_m": 36
+      },
+      {
+        "id": "bay_2",
+        "ref": "2",
+        "name": "Pátio Principal Stand 2",
+        "type": "stand",
+        "has_jetbridge": false,
+        "lat": -2.6686,
+        "lon": -56.7700,
+        "jetbridge_lat": null,
+        "jetbridge_lon": null,
+        "heading": 316,
+        "max_wingspan_m": 36
+      }
+    ],
+    "hold_points": [
+      {
+        "id": "hp_06",
+        "ref": "06",
+        "name": "Ponto de Espera 06",
+        "lat": -2.6788,
+        "lon": -56.7830,
+        "heading": 46
+      },
+      {
+        "id": "hp_24",
+        "ref": "24",
+        "name": "Ponto de Espera 24",
+        "lat": -2.6683,
+        "lon": -56.7716,
+        "heading": 226
+      }
+    ]
+  },
   "MMPR": {
     "icao": "MMPR",
     "terminals": [],
