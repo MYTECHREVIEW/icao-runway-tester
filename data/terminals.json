@@ -201446,5 +201446,13 @@
         "heading": 69
       }
     ]
+  },
+  "SBIC": {
+    "icao": "SBIC",
+    "terminals": [],
+    "gates": [],
+    "stands": [],
+    "bays": [],
+    "hold_points": []
   }
 }
