@@ -201454,5 +201454,13 @@
     "stands": [],
     "bays": [],
     "hold_points": []
+  },
+  "SBMN": {
+    "icao": "SBMN",
+    "terminals": [],
+    "gates": [],
+    "stands": [],
+    "bays": [],
+    "hold_points": []
   }
 }
